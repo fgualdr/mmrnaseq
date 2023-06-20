@@ -1,0 +1,36 @@
+process GFFREAD {
+    tag "$gff"
+    label 'process_low'
+
+    conda "bioconda::gffread=0.12.1"
+    container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
+        'https://depot.galaxyproject.org/singularity/gffread:0.12.1--h8b12597_0' :
+        'quay.io/biocontainers/gffread:0.12.1--h8b12597_0' }"
+
+    input:
+    path gff
+
+    output:
+    path "*_fix.gtf"        , emit: gtf_biotype
+    path "*_all.gtf"        , emit: gtf_all
+    path "versions.yml" , emit: versions
+
+    when:
+    task.ext.when == null || task.ext.when
+
+    script:
+    def args   = task.ext.args   ?: ''
+    def prefix = task.ext.prefix ?: "${gff.baseName}"
+    """
+    gffread \\
+        $gff \\
+        $args \\
+        -o ${prefix}_all.gtf
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        gffread: \$(gffread --version 2>&1)
+    END_VERSIONS
+    """
+}
+
