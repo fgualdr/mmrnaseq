@@ -320,7 +320,7 @@ pheatmap(
 
 ## WRITE SAMPLE DISTANCES TO FILE
 write.table(cbind(sample = rownames(sampleDistMatrix), sampleDistMatrix),file=paste(opt$outprefix, ".sample.dists.txt", sep=""),
-            row.names=FALSE, col.names=TRUE, sep="\t", quote=FALSE)
+            row.names=TRUE, col.names=NA, sep="\t", quote=FALSE)
 dev.off()
 
 ################################################
@@ -351,7 +351,7 @@ for (name in names(sizeFactors(dds))) {
 colData <- data.frame(Sample_ID=colnames(assay(dds, vst_name)), scaling=as.numeric(sizeFactors(dds)))
 rownames(colData) <- colData$Sample_ID
 write.table(colData,file=paste(opt$outdir, "/scaling_dat.txt", sep=""),
-        row.names=FALSE, col.names=TRUE, sep="\t", quote=FALSE)
+        row.names=TRUE, col.names=NA, sep="\t", quote=FALSE)
 
 
 norm_mat <- dat_all[, colData$Sample_ID]
