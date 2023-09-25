@@ -360,6 +360,12 @@
                     "fa_icon": "fas fa-hand-paper",
                     "description": "Minimum number of trimmed reads below which samples are removed from further processing. Some downstream steps in the pipeline will fail if this threshold is too low."
                 },
+                "squire_iter": {
+                    "type": "integer",
+                    "default": 10000,
+                    "fa_icon": "fas fa-hand-paper",
+                    "description": "Iterations performed by squire"
+                },
                 "skip_trimming": {
                     "type": "boolean",
                     "description": "Skip the adapter trimming step.",

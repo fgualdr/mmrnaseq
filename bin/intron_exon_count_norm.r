@@ -319,8 +319,9 @@ pheatmap(
 )
 
 ## WRITE SAMPLE DISTANCES TO FILE
+cn_add = c("sample", colnames(sampleDistMatrix))
 write.table(cbind(sample = rownames(sampleDistMatrix), sampleDistMatrix),file=paste(opt$outprefix, ".sample.dists.txt", sep=""),
-            row.names=TRUE, col.names=NA, sep="\t", quote=FALSE)
+            row.names=FALSE, sep="\t", quote=FALSE)
 dev.off()
 
 ################################################
@@ -350,24 +351,28 @@ for (name in names(sizeFactors(dds))) {
 # So we assemble the colData with the sizeFactors(dds) and write it to file
 colData <- data.frame(Sample_ID=colnames(assay(dds, vst_name)), scaling=as.numeric(sizeFactors(dds)))
 rownames(colData) <- colData$Sample_ID
-write.table(colData,file=paste(opt$outdir, "/scaling_dat.txt", sep=""),
-        row.names=TRUE, col.names=NA, sep="\t", quote=FALSE)
+
+write.table(cbind(Sample_ID=colData$Sample_ID,colData),file=paste(opt$outdir, "/scaling_dat.txt", sep=""),
+        row.names=FALSE, sep="\t", quote=FALSE)
 
 
 norm_mat <- dat_all[, colData$Sample_ID]
 norm_mat <- sweep(norm_mat[, colData$Sample_ID], 2, colData[, "scaling"], "*")
-write.table(norm_mat,file=paste(opt$outdir, "/ALL_READS_norm.txt", sep=""),
-        row.names=TRUE, col.names=NA, sep="\t", quote=FALSE)
+
+write.table(cbind(gene_id=rownames(norm_mat),norm_mat),file=paste(opt$outdir, "/ALL_READS_norm.txt", sep=""),
+        row.names=FALSE, sep="\t", quote=FALSE)
 
 norm_mat <- dat_int[, colData$Sample_ID]
 norm_mat <- sweep(norm_mat[, colData$Sample_ID], 2, colData[, "scaling"], "*")
-write.table(norm_mat,file=paste(opt$outdir, "/INTRON_READS_norm.txt", sep=""),
-        row.names=TRUE, col.names=NA, sep="\t", quote=FALSE)
+
+write.table(cbind(gene_id=rownames(norm_mat),norm_mat),file=paste(opt$outdir, "/INTRON_READS_norm.txt", sep=""),
+        row.names=FALSE, sep="\t", quote=FALSE)
 
 norm_mat <- dat_ex[, colData$Sample_ID]
 norm_mat <- sweep(norm_mat[, colData$Sample_ID], 2, colData[, "scaling"], "*")
-write.table(norm_mat,file=paste(opt$outdir, "/EXON_READS_norm.txt", sep=""),
-        row.names=TRUE, col.names=NA, sep="\t", quote=FALSE)
+
+write.table(cbind(gene_id=rownames(norm_mat),norm_mat),file=paste(opt$outdir, "/EXON_READS_norm.txt", sep=""),
+        row.names=FALSE, sep="\t", quote=FALSE)
 
 
 ################################################

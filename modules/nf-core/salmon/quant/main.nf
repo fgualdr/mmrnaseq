@@ -1,6 +1,6 @@
 process SALMON_QUANT {
     tag "$meta.id"
-    label "process_medium"
+    label "process_high_memory"
 
     conda "bioconda::salmon=1.10.1"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?

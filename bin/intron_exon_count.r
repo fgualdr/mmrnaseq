@@ -73,7 +73,8 @@ if(opt$strand == "reverse"){
     strandfun <- invertStrand
 }else{
     if(opt$strand == "non_specific"){
-        strandfun <- unstrand
+        strandfun <- NULL
+        ignorestrand <- TRUE
     }else{
         if(opt$strand == "forward"){
             strandfun <- NULL
