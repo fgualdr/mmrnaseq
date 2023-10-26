@@ -26,7 +26,7 @@ process BAM_EM_PREP {
     // convert to megabytes the memory available
     def avail_mem = task.memory ? task.memory.mega : false
     // sort memory is the available memory minus 1GB divided by the number of cpus
-    def sort_memory = avail_mem ? ((avail_mem - 1000) /task.cpus).intValue() : 2000
+    def sort_memory = avail_mem ? ((avail_mem - (1000*task.cpus)) /task.cpus).intValue() : 2000
 
     def strandedness = 0
     if (meta.strandedness == 'forward') {

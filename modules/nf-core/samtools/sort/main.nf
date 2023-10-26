@@ -24,7 +24,7 @@ process SAMTOOLS_SORT {
     // convert to megabytes the memory available
     def avail_mem = task.memory ? task.memory.mega : false
     // sort memory is the available memory minus 1GB divided by the number of cpus
-    def sort_memory = avail_mem ? ((avail_mem - 1000) /task.cpus).intValue() : 2000
+    def sort_memory = avail_mem ? ((avail_mem - (1000*task.cpus)) /task.cpus).intValue() : 2000
 
 
     if ("$bam" == "${prefix}.bam") error "Input and output names are the same, use \"task.ext.prefix\" to disambiguate!"

@@ -20,12 +20,7 @@ process BAM_EM_OUT {
 
     script:
     def prefix           = task.ext.prefix ?: "${meta.id}"
-    // added to control memory usage on HPC
-    def avail_mem = task.memory ? task.memory.toGiga() : false
-    def sort_mem = avail_mem ? "-m ${
-                                        def mem_gb = Math.round((avail_mem - 1) / task.cpus)
-                                        mem_gb == 0 ? '2G' : "${mem_gb}G"
-                                    }" : '-m 2G'
+
     """
     # We save the header:
     samtools view -h $bam_label > samp.sam
