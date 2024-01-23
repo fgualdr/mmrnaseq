@@ -25,8 +25,17 @@ checkPathParamList = [
 ]
 for (param in checkPathParamList) { if (param) { file(param, checkIfExists: true) } }
 
-// Check mandatory parameters
-if (params.input) { ch_input = file(params.input) } else { exit 1, 'Input samplesheet not specified!' }
+// Check mandatory parameters - if input is not present the public_data_ids must be in order to download and generate the input samplesheet
+if (params.input) { 
+    ch_input = file(params.input) 
+} else { 
+    // exit 1, 'Input samplesheet or public_data_ids not specified!' 
+    if (params.public_data_ids) {
+        ch_public_data_ids = file(params.public_data_ids)
+    } else {
+        exit 1, 'Input samplesheet or public_data_ids not specified!' 
+    }
+}
 
 // Check rRNA databases for sortmerna
 if (params.remove_ribo_rna) {
@@ -98,9 +107,12 @@ include { DUPRADAR                           } from '../modules/local/dupradar'
 include { MULTIQC                            } from '../modules/local/multiqc'
 include { MULTIQC_CUSTOM_BIOTYPE             } from '../modules/local/multiqc_custom_biotype'
 
+
+
 //
 // SUBWORKFLOW: Consisting of a mix of local and nf-core/modules
 //
+include { FASTQ_FROM_SRA } from '../subworkflows/local/fastq_from_sra'
 include { INPUT_CHECK    } from '../subworkflows/local/input_check'
 include { PREPARE_GENOME } from '../subworkflows/local/prepare_genome'
 include { ALIGN_STAR     } from '../subworkflows/local/align_star'
@@ -197,27 +209,70 @@ workflow RNASEQ {
     }
 
     //
+    // SUBWORKFLOW: generate samplesheet from public_data_ids if input not provided
+    //
+
+    if( ch_public_data_ids ){
+        // let's modify the ch_public_data_ids:
+        // we split by header and define a new meta for each row : 
+        // def meta = [:]
+        // meta.id           = row.sample
+        // meta.sample_accession = row.sample_accession
+        // meta.experiment_accession = row.experiment_accession
+        // meta.run_accession = row.run_accession
+        // meta.strandedness = row.strandedness
+        // meta.replicate = row.replicate
+        // meta.study_accession = row.study_accession
+        // use the LinkedHashMap to keep the order of the columns
+        ch_public_data_ids
+            .splitCsv ( header:true, sep:',' )
+            .map { row -> 
+                def meta = [:]
+                meta.id           = row.sample
+                meta.sample_accession = row.sample_accession
+                meta.experiment_accession = row.experiment_accession
+                meta.run_accession = row.run_accession
+                meta.strandedness = row.strandedness
+                meta.replicate = row.replicate
+                meta.study_accession = row.study_accession
+                [ meta ]
+            }
+        
+        ch_public_data_ids.view()
+
+        // // DOWNLOAD AND ASSEMBLE THE SAMPLESHEET
+        // SRX_DOWNLOAD( ch_public_data_ids )
+    }
+    // ultimately here we will assemble and generate a samplesheet which will be assigned to ch_input for the next step
+
+    //
     // SUBWORKFLOW: Read in samplesheet, validate and stage input files
     //
-    INPUT_CHECK (
-        ch_input
-    )
-    .reads
-    .map {
-        meta, fastq ->
-            new_id = meta.id - ~/_T\d+/
-            [ meta + [id: new_id], fastq ]
-    }
-    .groupTuple()
-    .branch {
-        meta, fastq ->
-            single  : fastq.size() == 1
-                return [ meta, fastq.flatten() ]
-            multiple: fastq.size() > 1
-                return [ meta, fastq.flatten() ]
-    }
-    .set { ch_fastq }
-    ch_versions = ch_versions.mix(INPUT_CHECK.out.versions)
+    // we perform this only when ch_input is not defined so if ch_input is defined we run the INPUT_CHECK
+    
+    if(ch_input){
+
+        INPUT_CHECK (
+            ch_input
+        )
+        .reads
+        .map {
+            meta, fastq ->
+                new_id = meta.id - ~/_T\d+/
+                [ meta + [id: new_id], fastq ]
+        }
+        .groupTuple()
+        .branch {
+            meta, fastq ->
+                single  : fastq.size() == 1
+                    return [ meta, fastq.flatten() ]
+                multiple: fastq.size() > 1
+                    return [ meta, fastq.flatten() ]
+        }
+        .set { ch_fastq }
+        ch_versions = ch_versions.mix(INPUT_CHECK.out.versions)
+
+    // }
 
     //
     // MODULE: Concatenate FastQ files from same sample if required
@@ -383,6 +438,7 @@ workflow RNASEQ {
     ch_star_multiqc               = Channel.empty()
     ch_aligner_pca_multiqc        = Channel.empty()
     ch_aligner_clustering_multiqc = Channel.empty()
+
     if (!params.skip_alignment && params.aligner == 'star_salmon') {
         ALIGN_STAR (
             ch_filtered_reads,
@@ -474,26 +530,26 @@ workflow RNASEQ {
         //
         // SUBWORKFLOW: Count reads from BAM alignments using Salmon
         //
-        QUANTIFY_STAR_SALMON (
-            ch_transcriptome_bam,
-            ch_dummy_file,
-            PREPARE_GENOME.out.transcript_fasta,
-            PREPARE_GENOME.out.gtf,
-            true,
-            params.salmon_quant_libtype ?: ''
-        )
-        ch_versions = ch_versions.mix(QUANTIFY_STAR_SALMON.out.versions)
-
-        // Run DESeq2 QC on Salmon counts
-        DESEQ2_QC_STAR_SALMON (
-            QUANTIFY_STAR_SALMON.out.counts_gene,
-            ch_pca_header_multiqc,
-            ch_clustering_header_multiqc
-        )
-        ch_aligner_pca_multiqc        = DESEQ2_QC_STAR_SALMON.out.pca_multiqc
-        ch_aligner_clustering_multiqc = DESEQ2_QC_STAR_SALMON.out.dists_multiqc
-        ch_versions = ch_versions.mix(DESEQ2_QC_STAR_SALMON.out.versions)
-        
+        if(!params.skip_quantify_salmon){
+            QUANTIFY_STAR_SALMON (
+                ch_transcriptome_bam,
+                ch_dummy_file,
+                PREPARE_GENOME.out.transcript_fasta,
+                PREPARE_GENOME.out.gtf,
+                true,
+                params.salmon_quant_libtype ?: ''
+            )
+            ch_versions = ch_versions.mix(QUANTIFY_STAR_SALMON.out.versions)
+            // Run DESeq2 QC on Salmon counts
+            DESEQ2_QC_STAR_SALMON (
+                QUANTIFY_STAR_SALMON.out.counts_gene,
+                ch_pca_header_multiqc,
+                ch_clustering_header_multiqc
+            )
+            ch_aligner_pca_multiqc        = DESEQ2_QC_STAR_SALMON.out.pca_multiqc
+            ch_aligner_clustering_multiqc = DESEQ2_QC_STAR_SALMON.out.dists_multiqc
+            ch_versions = ch_versions.mix(DESEQ2_QC_STAR_SALMON.out.versions)
+        }
     }
 
     //
@@ -641,43 +697,44 @@ workflow RNASEQ {
     // INTRON_EXON_COUNT output each the meta.id_all_counts exon_counts and intron_counts .. 
     // Combine the all_counts, exon_counts and intron_counts into channels
 
-    INTRON_EXON_COUNT
-        .output
-        .count_rds
-        .collect()
-        .set { ch_all_rds }   
-    
-    ch_all_rds.view()
+    if(!params.skip_bigwig && !params.intron_exon_count && !params.count_normalize){
 
-    NORMALIZE_COUNTS_INTRON_EXON(
-        ch_all_rds,
-        ch_pca_header_multiqc,
-        ch_clustering_header_multiqc
-    )
+        INTRON_EXON_COUNT
+            .output
+            .count_rds
+            .collect()
+            .set { ch_all_rds }   
 
-    NORMALIZE_COUNTS_INTRON_EXON
-        .out
-        .noamlization_txt
-        .splitCsv ( header:true, sep:'\t' )
-        .map { row -> 
-            def id = row.Sample_ID
-            def value = row.scaling
-            [ id, value ]
-        }
-        .set { ch_size_factors }
+        NORMALIZE_COUNTS_INTRON_EXON(
+            ch_all_rds,
+            ch_pca_header_multiqc,
+            ch_clustering_header_multiqc
+        )
+        NORMALIZE_COUNTS_INTRON_EXON
+            .out
+            .noamlization_txt
+            .splitCsv ( header:true, sep:'\t' )
+            .map { row -> 
+                def id = row.Sample_ID
+                def value = row.scaling
+                [ id, value ]
+            }
+            .set { ch_size_factors }
 
-    ch_bam_genome_bai
-        .combine(ch_size_factors)
-        .map { 
-            meta1, bam1, bai1, id2, scaling2 ->
-                meta1.id == id2 ? [ meta1, bam1, bai1 ,scaling2] : null
-        }
-        .set { ch_bam_bai_scale }
 
-    DEEPTOOLS_BIGWIG_NORM(
-        ch_bam_bai_scale
-    )
-    ch_versions = ch_versions.mix(DEEPTOOLS_BIGWIG_NORM.out.versions.first())
+        ch_bam_genome_bai
+            .combine(ch_size_factors)
+            .map { 
+                meta1, bam1, bai1, id2, scaling2 ->
+                    meta1.id == id2 ? [ meta1, bam1, bai1 ,scaling2] : null
+            }
+            .set { ch_bam_bai_scale }
+
+        DEEPTOOLS_BIGWIG_NORM(
+            ch_bam_bai_scale
+        )
+        ch_versions = ch_versions.mix(DEEPTOOLS_BIGWIG_NORM.out.versions.first())
+    }
 
     //
     // MODULE: Feature biotype QC using featureCounts
@@ -847,6 +904,7 @@ workflow RNASEQ {
             ch_tin_multiqc.collect{it[1]}.ifEmpty([])
         )
         multiqc_report = MULTIQC.out.report.toList()
+    }
     }
 }
 
