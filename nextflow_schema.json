@@ -10,7 +10,14 @@
             "type": "object",
             "fa_icon": "fas fa-terminal",
             "description": "Define where the pipeline should find input data and save output data.",
-            "required": ["outdir"],
+            "anyOf": [
+                {
+                    "required": ["input", "outdir"]
+                },
+                {
+                    "required": ["public_data_ids", "outdir"]
+                }
+            ],
             "properties": {
                 "input": {
                     "type": "string",
@@ -517,9 +524,14 @@
                     "help_text": "See https://github.com/fgualdr/GeneralNormalizer.",
                     "default": true
                 },
-
+                "skip_quantify_salmon": {
+                    "type": "boolean",
+                    "description": "Whether to skip salmon quantification",
+                    "help_text": "See https://github.com/fgualdr/GeneralNormalizer.",
+                    "default": false
+                },
                 "sigma_times": {
-                    "type": "integer",
+                    "type": "number",
                     "default": 1,
                     "description": "Number of sigmas to include invariant features"
                 },
@@ -769,6 +781,12 @@
                     "description": "Show all params when using `--help`",
                     "hidden": true,
                     "help_text": "By default, parameters set as _hidden_ in the schema are not shown on the command line when a user runs with `--help`. Specifying this option will tell the pipeline to show all parameters."
+                },
+                "enable_conda": {
+                    "type": "boolean",
+                    "description": "Run this workflow with Conda. You can also use '-profile conda' instead of providing this parameter.",
+                    "hidden": true,
+                    "fa_icon": "fas fa-bacon"
                 }
             }
         }

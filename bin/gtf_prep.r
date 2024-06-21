@@ -30,7 +30,17 @@ option_list <- list(
 )
 opt <- parse_args(OptionParser(option_list=option_list))
 
-# To use this code from command line: Rscript gtf_prep.r -g /hpcnfs/scratch/commun/TRANSCRIPTOME/GENOME/GRCh38/GRCh38.p13.genome.gtf -o /hpcnfs/scratch/commun/TRANSCRIPTOME/GENOME/GRCh38/GRCh38.p13.genome.gtf.prep.rds -s /hpcnfs/scratch/commun/TRANSCRIPTOME/GENOME/GRCh38/GRCh38.p13.genome.chrom.sizes -c 5
+# To use this code from command line: 
+# Rscript gtf_prep.r 
+# opt <- list()
+# opt$gtf = "/hpcnfs/data/GN2/fgualdrini/UsefullData/DB/Assembly/ncbi_dataset/data/GCF_009914755.1/GCF_009914755.1_T2T-CHM13v2.0_genomic.gtf"
+# opt$out = "./"
+# opt$chrom_size = "/hpcnfs/scratch/temporary/fgualdr_ccle_test/work/f7/e714dd3b767835c4c5f0ab1ce46ef2/GCF_009914755.1_T2T-CHM13v2.0_genomic.fa.sizes"
+# opt$cpus = 5
+# -g /hpcnfs/data/GN2/fgualdrini/UsefullData/DB/Assembly/ncbi_dataset/data/GCF_009914755.1/GCF_009914755.1_T2T-CHM13v2.0_genomic.gtf 
+# -o './' 
+# -s /hpcnfs/scratch/temporary/fgualdr_ccle_test/work/f7/e714dd3b767835c4c5f0ab1ce46ef2/GCF_009914755.1_T2T-CHM13v2.0_genomic.fa.sizes
+# -c 5
 
 # Cusom functions:
 `%!in%` <- Negate(`%in%`)
@@ -44,7 +54,7 @@ opt <- parse_args(OptionParser(option_list=option_list))
 
 exactMatch = tolower(c("chrM","y", "w", "z", "m", "mt", "mtdna", "pt", "mtr", "2-micron", "ebv", "nc_000087.8","nc_005089.1"))
 fuzzyMatch = tolower(c("chrUn", "random", "v1", "v2", "kn707", "jtfh","nw_","nt_"))
-sex = tolower(c("chrX", "chrY","x","y"))
+sex = tolower(c("chrX", "chrY","x","y","nc_060947.1","nc_060948.1"))
 
 # Read the GTF file
 gtf <- read.table(opt$gtf, sep="\t", header=FALSE, comment.char="#", stringsAsFactors=FALSE)
@@ -52,7 +62,8 @@ chr = unique(gtf[,1])
 # Remove matching
 autosome <- chr[!(tolower(chr) %in% exactMatch)]
 autosome <- autosome[!grepl(paste(fuzzyMatch, collapse="|"), tolower(autosome))]
-mito <- chr[!(tolower(chr) %in% autosome)]
+
+mito <- chr[!(tolower(chr) %in% tolower(autosome))]
 mito <- mito[!grepl(paste(fuzzyMatch, collapse="|"), tolower(mito))]
 # Remove sex chromosomes
 mito <- mito[!grepl(paste(sex, collapse="|"), tolower(mito))]
@@ -62,8 +73,12 @@ chrom_channel = read.delim(opt$chrom_size,header=FALSE,sep="\t",stringsAsFactors
 colnames(chrom_channel) = c("chrom","length")
 gtf = gtf[gtf[,1] %in% chrom_channel[,1],]
 write.table(gtf, file = "./gtf.gtf", quote = FALSE, sep = "\t", row.names = FALSE, col.names = FALSE)
-txdb <- makeTxDbFromGFF("./gtf.gtf", format="auto", circ_seqs = mito,chrominfo=chrom_channel)
 
+if(length(mito) > 0){
+    txdb <- makeTxDbFromGFF("./gtf.gtf", format="auto", circ_seqs = mito,chrominfo=chrom_channel)
+}else{
+    txdb <- makeTxDbFromGFF("./gtf.gtf", format="auto",chrominfo=chrom_channel)
+}
 
 # From the GTF get the Metadata stored in the column 9 strplit by ";"
 metaDat <- strsplit(gtf[,9], "; ")
@@ -84,12 +99,12 @@ metaDatV <- BiocParallel::bplapply(metaDat, function(x) {
     return(y)
 }, BPPARAM=param)
 
-nn <- lapply(metaDatV,names)
+nn <- BiocParallel::bplapply(metaDatV,names, BPPARAM=param)
 nn = unique(unlist(nn))
-metaDatV <- lapply(metaDatV, function(x) {
+metaDatV <- BiocParallel::bplapply(metaDatV, function(x) {
     x = x[nn]
     return(x)
-})
+}, BPPARAM=param)
 
 # Convert the list to a data frame
 metaDatVM <- do.call(rbind, metaDatV)
@@ -100,7 +115,6 @@ metaDatVM = cbind(gtf[,1:8], metaDatVM)
 colnames(metaDatVM)[1:8] = c("seqnames", "source", "feature", "start", "end", "score", "strand", "frame")
 # Convert to GRanges keep metadata
 
-
 ##############################################################################################################
 # Reduce/split Transcripts by gene
 
@@ -109,7 +123,6 @@ Exons_by <- GenomicFeatures::exonsBy(txdb, by="gene")
 CDS_by <- GenomicFeatures::cdsBy(txdb, by="gene")
 Five_UTR_by <- GenomicFeatures::fiveUTRsByTranscript(txdb, use.names=TRUE)
 Three_UTR_by <- GenomicFeatures::threeUTRsByTranscript(txdb, use.names=TRUE)
-
 
 Transcripts_by_red <- GenomicRanges::reduce(Transcripts_by)
 # Get the number of transcripts per gene
@@ -235,10 +248,9 @@ CDS = split(CDS, CDS$gene_id)
 CDS_Rage = range(CDS_by_single)
 
 
-
-
 transcripts <- as.data.frame(Transcripts)
 colnames(transcripts) <- c("tx_id","tx_name","tx_chrom","tx_start","tx_end","width","tx_strand","gene_id")
+transcripts$tx_id <- 1:dim(transcripts)[1]
 transcripts$gene_id <- transcripts$tx_name
 transcripts$tx_id <- as.integer(transcripts$tx_id)
 transcripts$tx_start <- as.integer(transcripts$tx_start)
@@ -251,29 +263,28 @@ transcripts$tx_strand <- as.character(transcripts$tx_strand)
 ## Make a ditionary of Tx_id and Tx_name
 Dictio <- cbind(transcripts$tx_id,transcripts$tx_name)
 colnames(Dictio) <- c("tx_id","tx_name")
-rownames(Dictio) <- transcripts$tx_name
+rownames(Dictio) <- transcripts$gene_id
 Dictio <- as.data.frame(Dictio)
+DictioT <- Dictio$tx_id
+names(DictioT) <- Dictio$tx_name
 
 # Exons
 ExonByGene <- unlist(Exons)
-ExonByGene$tx_id <- Dictio[ExonByGene$gene_id,"tx_id"]
-names(ExonByGene) = ExonByGene$gene_id
+names(ExonByGene) = NULL
+ExonByGene$tx_id <- as.numeric(as.character(DictioT[ExonByGene$gene_id]))
 
-Dictio_exon_rank <- as.data.frame(matrix(NA,ncol=3,nrow=length(names(ExonByGene))))
-colnames(Dictio_exon_rank) <- c("tx_id","tx_name","exon_rank")
-Dictio_exon_rank$tx_name <- names(ExonByGene)
-Dictio_exon_rank$tx_id <- ExonByGene$tx_id
-
-# Add the exon rank:
-Dictio_exon_rank = split(Dictio_exon_rank,Dictio_exon_rank$tx_name)
-
-Dictio_exon_rank = lapply(Dictio_exon_rank, function(x) {
-    x$exon_rank <- 1:nrow(x)
-    return(x)
+tx_id_all <- split(ExonByGene$tx_id,ExonByGene$tx_id)
+# so we generate a progression number for each element in exon_rank
+# so if exon rank has: 1,1,1,1,2,2,2,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4
+# it has to turn into  1,2,3,4,1,2,3,1,2,3,4,5,6,7,8,9,1,2,3,4,5,6
+exon_rank <- lapply(tx_id_all, function(x) {
+    y = 1:length(x)
+    return(y)
 })
-Dictio_exon_rank = do.call(rbind,Dictio_exon_rank)
+exon_rank <- unlist(exon_rank)
+exon_rank = as.data.frame(cbind(ExonByGene$tx_id,exon_rank))
+ExonByGene$exon_rank <- exon_rank$exon_rank
 
-ExonByGene$exon_rank <- Dictio_exon_rank$exon_rank
 ExonByGene$cds_start <- NA
 ExonByGene$cds_end <- NA
 
@@ -286,7 +297,8 @@ hits.1 <- findOverlaps(combo,ExonByGene,type="within")
 ExonByGene[subjectHits(hits.1)]$cds_start <- start(combo)[queryHits(hits.1)]
 ExonByGene[subjectHits(hits.1)]$cds_end <- end(combo)[queryHits(hits.1)]
 # Remake as GRangeList
-ExonByGene_split <- split(ExonByGene, names(ExonByGene))
+ExonByGene_split <- split(ExonByGene, ExonByGene$tx_id)
+
 
 splicings_db <- as.data.frame(ExonByGene_split)
 splicings_db$exon_id <- 1:nrow(splicings_db)
@@ -300,6 +312,7 @@ splicings$exon_chrom <- as.character(splicings$exon_chrom)
 splicings$exon_strand <- as.character(splicings$exon_strand)
 splicings$exon_start <- as.integer(as.character(splicings$exon_start))
 splicings$exon_end <- as.integer(as.character(splicings$exon_end))
+
 
 # Chrom chrominfo(mm10Txdb)
 # Need to fix the chrominfo

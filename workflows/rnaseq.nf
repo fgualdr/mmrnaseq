@@ -17,7 +17,7 @@ WorkflowRnaseq.initialise(params, log, valid_params)
 
 // Check input path parameters to see if they exist
 checkPathParamList = [
-    params.input, params.multiqc_config,
+    params.input, params.multiqc_config,params.public_data_ids,
     params.fasta, params.transcript_fasta, params.additional_fasta,
     params.gtf, params.gff, params.gene_bed,
     params.ribo_database_manifest, params.splicesites,
@@ -28,10 +28,12 @@ for (param in checkPathParamList) { if (param) { file(param, checkIfExists: true
 // Check mandatory parameters - if input is not present the public_data_ids must be in order to download and generate the input samplesheet
 if (params.input) { 
     ch_input = file(params.input) 
+    ch_public_data_ids = false
 } else { 
     // exit 1, 'Input samplesheet or public_data_ids not specified!' 
     if (params.public_data_ids) {
         ch_public_data_ids = file(params.public_data_ids)
+        ch_input = false
     } else {
         exit 1, 'Input samplesheet or public_data_ids not specified!' 
     }
@@ -107,8 +109,6 @@ include { DUPRADAR                           } from '../modules/local/dupradar'
 include { MULTIQC                            } from '../modules/local/multiqc'
 include { MULTIQC_CUSTOM_BIOTYPE             } from '../modules/local/multiqc_custom_biotype'
 
-
-
 //
 // SUBWORKFLOW: Consisting of a mix of local and nf-core/modules
 //
@@ -117,6 +117,7 @@ include { INPUT_CHECK    } from '../subworkflows/local/input_check'
 include { PREPARE_GENOME } from '../subworkflows/local/prepare_genome'
 include { ALIGN_STAR     } from '../subworkflows/local/align_star'
 include { BAM_FILTER_EM     } from '../subworkflows/local/bam_filter_em'
+
 include { SQUIRE_COUNT     } from '../modules/local/squire_count'
 include { SQUIRE_CLEAN      } from '../modules/local/squire_clean'
 
@@ -133,7 +134,6 @@ include { DEEPTOOLS_BIGWIG_NORM } from '../modules/local/deeptools_bw_norm'
     IMPORT NF-CORE MODULES/SUBWORKFLOWS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
-
 //
 // MODULE: Installed directly from nf-core/modules
 //
@@ -144,7 +144,6 @@ include { PRESEQ_LCEXTRAP             } from '../modules/nf-core/preseq/lcextrap
 include { QUALIMAP_RNASEQ             } from '../modules/nf-core/qualimap/rnaseq/main'
 include { SORTMERNA                   } from '../modules/nf-core/sortmerna/main'
 include { SUBREAD_FEATURECOUNTS       } from '../modules/nf-core/subread/featurecounts/main'
-
 include { CUSTOM_DUMPSOFTWAREVERSIONS } from '../modules/nf-core/custom/dumpsoftwareversions/main'
 
 //
@@ -153,7 +152,6 @@ include { CUSTOM_DUMPSOFTWAREVERSIONS } from '../modules/nf-core/custom/dumpsoft
 include { FASTQ_SUBSAMPLE_FQ_SALMON        } from '../subworkflows/nf-core/fastq_subsample_fq_salmon/main'
 include { FASTQ_FASTQC_UMITOOLS_TRIMGALORE } from '../subworkflows/nf-core/fastq_fastqc_umitools_trimgalore/main'
 include { FASTQ_FASTQC_UMITOOLS_FASTP      } from '../subworkflows/nf-core/fastq_fastqc_umitools_fastp/main'
-
 include { BAM_SORT_STATS_SAMTOOLS  as BAM_SORT_STATS_SAMTOOLS_UMI        } from '../subworkflows/nf-core/bam_sort_stats_samtools/main'
 include { BAM_SORT_STATS_SAMTOOLS  as BAM_SORT_STATS_SAMTOOLS_BAM        } from '../subworkflows/nf-core/bam_sort_stats_samtools/main'
 include { BAM_MARKDUPLICATES_PICARD        } from '../subworkflows/nf-core/bam_markduplicates_picard/main'
@@ -209,48 +207,43 @@ workflow RNASEQ {
     }
 
     //
-    // SUBWORKFLOW: generate samplesheet from public_data_ids if input not provided
-    //
+    // SUBWORKFLOW: generate channel of [meta, fastq] from ch_public_data_ids
+    // check if ch_public_data_ids is not empty
 
     if( ch_public_data_ids ){
-        // let's modify the ch_public_data_ids:
-        // we split by header and define a new meta for each row : 
-        // def meta = [:]
-        // meta.id           = row.sample
-        // meta.sample_accession = row.sample_accession
-        // meta.experiment_accession = row.experiment_accession
-        // meta.run_accession = row.run_accession
-        // meta.strandedness = row.strandedness
-        // meta.replicate = row.replicate
-        // meta.study_accession = row.study_accession
-        // use the LinkedHashMap to keep the order of the columns
-        ch_public_data_ids
-            .splitCsv ( header:true, sep:',' )
-            .map { row -> 
-                def meta = [:]
-                meta.id           = row.sample
-                meta.sample_accession = row.sample_accession
-                meta.experiment_accession = row.experiment_accession
-                meta.run_accession = row.run_accession
-                meta.strandedness = row.strandedness
-                meta.replicate = row.replicate
-                meta.study_accession = row.study_accession
-                [ meta ]
-            }
+        // FASTQ_FROM_SRA takes the public_data_ids and generate a channel of [meta, fastq]
+        // we need to apply a map to assess if there are fastqs ending with _2.fastq.gz so we set the meta.single_end to false
+        // then if there are multiple _1 and multiple _2 we flatten them with ',' and we set the meta.single_end to true
+        FASTQ_FROM_SRA (
+            ch_public_data_ids
+        )
+        .reads
+        .map {
+            meta, fastq ->
+                new_id = meta.id.replaceAll(/_[^_]+$/, "")
+                [ meta + [id: new_id], fastq ]
+        }
+        .groupTuple()
+        .branch {
+            meta, fastq ->
+                single  : fastq.size() == 1
+                    return [ meta, fastq.flatten() ]
+                multiple: fastq.size() > 1
+                    return [ meta, fastq.flatten() ]
+        }
+        .set { ch_fastq }
+        // view the ch_fastq 
         
-        ch_public_data_ids.view()
+        ch_versions = ch_versions.mix(FASTQ_FROM_SRA.out.versions)
 
-        // // DOWNLOAD AND ASSEMBLE THE SAMPLESHEET
-        // SRX_DOWNLOAD( ch_public_data_ids )
-    }
-    // ultimately here we will assemble and generate a samplesheet which will be assigned to ch_input for the next step
+        ch_versions.view()
 
-    //
-    // SUBWORKFLOW: Read in samplesheet, validate and stage input files
-    //
-    // we perform this only when ch_input is not defined so if ch_input is defined we run the INPUT_CHECK
-    
-    if(ch_input){
+    } else if(ch_input){
+
+        //
+        // SUBWORKFLOW: Read in samplesheet, validate and stage input files
+        // we perform this only when ch_input is not defined so if ch_input is defined we run the INPUT_CHECK
+        //
 
         INPUT_CHECK (
             ch_input
@@ -258,7 +251,7 @@ workflow RNASEQ {
         .reads
         .map {
             meta, fastq ->
-                new_id = meta.id - ~/_T\d+/
+                new_id = meta.id.replaceAll(/_[^_]+$/, "")
                 [ meta + [id: new_id], fastq ]
         }
         .groupTuple()
@@ -271,8 +264,7 @@ workflow RNASEQ {
         }
         .set { ch_fastq }
         ch_versions = ch_versions.mix(INPUT_CHECK.out.versions)
-
-    // }
+    }
 
     //
     // MODULE: Concatenate FastQ files from same sample if required
@@ -333,6 +325,7 @@ workflow RNASEQ {
     ch_fastqc_trim_multiqc = Channel.empty()
     ch_trim_log_multiqc    = Channel.empty()
     ch_trim_read_count     = Channel.empty()
+    
     if (params.trimmer == 'trimgalore') {
         FASTQ_FASTQC_UMITOOLS_TRIMGALORE (
             ch_strand_inferred_fastq,
@@ -694,17 +687,14 @@ workflow RNASEQ {
         PREP_GTF.out.metadata
     )
 
-    // INTRON_EXON_COUNT output each the meta.id_all_counts exon_counts and intron_counts .. 
-    // Combine the all_counts, exon_counts and intron_counts into channels
-
-    if(!params.skip_bigwig && !params.intron_exon_count && !params.count_normalize){
-
-        INTRON_EXON_COUNT
-            .output
-            .count_rds
-            .collect()
-            .set { ch_all_rds }   
-
+    count_rds = INTRON_EXON_COUNT.out.count_rds
+    ch_all_rds = count_rds.toList()
+    ch_all_rds.view()
+    // Filter the list to only include lists with more than one item
+    ch_filtered = ch_all_rds.filter { it.size() > 1 }
+    ch_filtered.view()
+    if(!params.skip_bigwig && params.normalize && ch_filtered) {
+    
         NORMALIZE_COUNTS_INTRON_EXON(
             ch_all_rds,
             ch_pca_header_multiqc,
@@ -729,17 +719,19 @@ workflow RNASEQ {
                     meta1.id == id2 ? [ meta1, bam1, bai1 ,scaling2] : null
             }
             .set { ch_bam_bai_scale }
-
+        ch_bam_bai_scale.view()
         DEEPTOOLS_BIGWIG_NORM(
             ch_bam_bai_scale
         )
         ch_versions = ch_versions.mix(DEEPTOOLS_BIGWIG_NORM.out.versions.first())
     }
+    
 
     //
     // MODULE: Feature biotype QC using featureCounts
     //
     ch_featurecounts_multiqc = Channel.empty()
+
     if (!params.skip_alignment && !params.skip_qc && !params.skip_biotype_qc && biotype) {
         PREPARE_GENOME
             .out
@@ -904,7 +896,6 @@ workflow RNASEQ {
             ch_tin_multiqc.collect{it[1]}.ifEmpty([])
         )
         multiqc_report = MULTIQC.out.report.toList()
-    }
     }
 }
 

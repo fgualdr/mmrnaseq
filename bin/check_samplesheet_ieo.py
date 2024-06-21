@@ -183,13 +183,24 @@ def check_samplesheet(file_in, file_out):
                         fastqs_1 = list(subfolders[0].glob(search))
                         search = "*"+rid+"*"+sid+'*'+ll+'*R2*fastq.gz'
                         fastqs_2 = list(subfolders[0].glob(search))
-                        
+
+                        # check if fastqs_1 is not empty
+                        if len(fastqs_1) > 0:
+                            print("Found", len(fastqs_1), "files matching the pattern.")
+                        else:
+                            print("No files found matching the pattern.")
+                        # check if fastqs_2 is not empty
+                        if len(fastqs_2) > 0:
+                            print("Found", len(fastqs_2), "files matching the pattern.")
+                        else:
+                            print("No files found matching the pattern.")
+
                         ## Auto-detect paired-end/single-end
                         sample_info = []  ## [single_end, fastq_1, fastq_2, strandedness]
                         if sample and len(fastqs_1) !=0 and len(fastqs_2) !=0:  ## Paired-end short reads
                             sample_info = ["0", str(fastqs_1[0]), str(fastqs_2[0]), strandedness]
                         elif sample and len(fastqs_1) !=0 and len(fastqs_2) ==0:  ## Single-end short reads
-                            sample_info = ["1", str(fastqs_1[0]), str(fastqs_2[0]), strandedness]
+                            sample_info = ["1", str(fastqs_1[0]), str(""), strandedness]
                         else:
                             print_error("Invalid combination of columns provided!", "Line", line)
                         

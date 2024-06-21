@@ -19,8 +19,8 @@ process DEEPTOOLS_BIGWIG_NORM {
     script:
     def prefix = task.ext.prefix ?: "${meta.id}"
 
-    def pe     = meta.single_end ? '' : '-pc'
-    def extend = (meta.single_end && params.fragment_size > 0) ? "-fs ${params.fragment_size}" : ''
+    def pe     = meta.single_end ? 'single' : 'paired'
+
 
     def strandedness = 'non_stranded'
     if (meta.strandedness == 'forward') {
@@ -47,65 +47,96 @@ process DEEPTOOLS_BIGWIG_NORM {
         END_VERSIONS
         """
     } else {
-        """
-        echo $scaling
-        echo $prefix
+        if( pe == 'single' ){
+            """
+            echo $scaling
+            echo $prefix
 
-        # include reads that are 2nd in a pair (128);
-        # exclude reads that are mapped to the reverse strand (16)
-        samtools view -b -f 128 -F 16 $bam > ${prefix}.fwd1.bam
+            # Forward strand
+            bamCoverage -b $bam \\
+                --numberOfProcessors $task.cpus \\
+                --binSize 1 \\
+                --scaleFactor $scaling \\
+                --samFlagExclude 16 \\
+                -o ${prefix}.fwd.norm.bw
 
-        # exclude reads that are mapped to the reverse strand (16) and
-        # first in a pair (64): 64 + 16 = 80
-        samtools view -b -f 80 $bam > ${prefix}.fwd2.bam
+            # Reverse strand
+            bamCoverage -b $bam \\
+                --numberOfProcessors $task.cpus \\
+                --binSize 1 \\
+                --scaleFactor $scaling \\
+                --samFlagInclude 16 \\
+                -o ${prefix}.rev.norm.bw
 
-        # combine the temporary files
-        samtools merge -f ${prefix}.fwd.bam ${prefix}.fwd1.bam ${prefix}.fwd2.bam
-        rm -rf ${prefix}.fwd1.bam ${prefix}.fwd2.bam
+            cat <<-END_VERSIONS > versions.yml
+            "${task.process}":
+                deeptools: \$(computeMatrix --version | sed -e "s/computeMatrix //g")
+            END_VERSIONS
+            """
+        }else{
+            if( pe == 'paired' ){  
+                """
+                echo $scaling
+                echo $prefix
 
-        # index the filtered BAM file
-        samtools index ${prefix}.fwd.bam
+                # include reads that are 2nd in a pair (128);
+                # exclude reads that are mapped to the reverse strand (16)
+                samtools view -b -f 128 -F 16 $bam > ${prefix}.fwd1.bam
 
-        # run bamCoverage
-        bamCoverage \\
-            --bam ${prefix}.fwd.bam \\
-            --numberOfProcessors $task.cpus \\
-            --binSize 1 \\
-            --scaleFactor $scaling \\
-            -o ${prefix}.fwd.norm.bw
+                # exclude reads that are mapped to the reverse strand (16) and
+                # first in a pair (64): 64 + 16 = 80
+                samtools view -b -f 80 $bam > ${prefix}.fwd2.bam
+
+                # combine the temporary files
+                samtools merge -f ${prefix}.fwd.bam ${prefix}.fwd1.bam ${prefix}.fwd2.bam
+                rm -rf ${prefix}.fwd1.bam ${prefix}.fwd2.bam
+
+                # index the filtered BAM file
+                samtools index ${prefix}.fwd.bam
+
+                # run bamCoverage
+                bamCoverage \\
+                    --bam ${prefix}.fwd.bam \\
+                    --numberOfProcessors $task.cpus \\
+                    --binSize 1 \\
+                    --scaleFactor $scaling \\
+                    -o ${prefix}.fwd.norm.bw
+                
+                rm -rf ${prefix}.fwd.bam ${prefix}.fwd.bam.bai
+
+                # include reads that map to the reverse strand (128)
+                # and are second in a pair (16): 128 + 16 = 144
+                samtools view -b -f 144 $bam > ${prefix}.rev1.bam
+
+                # include reads that are first in a pair (64), but
+                # exclude those ones that map to the reverse strand (16)
+                samtools view -b -f 64 -F 16 $bam > ${prefix}.rev2.bam
+
+                # merge the temporary files
+                samtools merge -f ${prefix}.rev.bam ${prefix}.rev1.bam ${prefix}.rev2.bam
+                rm -rf ${prefix}.rev1.bam ${prefix}.rev2.bam
+
+                # index the merged, filtered BAM file
+                samtools index ${prefix}.rev.bam
+
+                # run bamCoverage
+                bamCoverage \\
+                    --bam ${prefix}.rev.bam \\
+                    --numberOfProcessors $task.cpus \\
+                    --binSize 1 \\
+                    --scaleFactor $scaling \\
+                    -o ${prefix}.rev.norm.bw
+
+                rm -rf ${prefix}.rev.bam ${prefix}.rev.bam.bai
+
+                cat <<-END_VERSIONS > versions.yml
+                "${task.process}":
+                    deeptools: \$(computeMatrix --version | sed -e "s/computeMatrix //g")
+                END_VERSIONS
+                """
+            }
+        }
         
-        rm -rf ${prefix}.fwd.bam ${prefix}.fwd.bam.bai
-
-        # include reads that map to the reverse strand (128)
-        # and are second in a pair (16): 128 + 16 = 144
-        samtools view -b -f 144 $bam > ${prefix}.rev1.bam
-
-        # include reads that are first in a pair (64), but
-        # exclude those ones that map to the reverse strand (16)
-        samtools view -b -f 64 -F 16 $bam > ${prefix}.rev2.bam
-
-        # merge the temporary files
-        samtools merge -f ${prefix}.rev.bam ${prefix}.rev1.bam ${prefix}.rev2.bam
-        rm -rf ${prefix}.rev1.bam ${prefix}.rev2.bam
-
-        # index the merged, filtered BAM file
-        samtools index ${prefix}.rev.bam
-
-        # run bamCoverage
-        bamCoverage \\
-            --bam ${prefix}.rev.bam \\
-            --numberOfProcessors $task.cpus \\
-            --binSize 1 \\
-            --scaleFactor $scaling \\
-            -o ${prefix}.rev.norm.bw
-
-        rm -rf ${prefix}.rev.bam ${prefix}.rev.bam.bai
-
-        cat <<-END_VERSIONS > versions.yml
-        "${task.process}":
-            deeptools: \$(computeMatrix --version | sed -e "s/computeMatrix //g")
-        END_VERSIONS
-        """
     }
-        
 }
+
