@@ -41,14 +41,15 @@ workflow BAM_FILTER_EM {
         BAM_EM_OUT( ch_em_bam,
                     ch_chrom_sizes
                     ) 
+
         ch_versions = ch_versions.mix(BAM_EM_OUT.out.versions.first())
-        ch_bam_em = BAM_EM_OUT.out.bam
+        ch_filter_bam = BAM_EM_OUT.out.bam
     } else {
-        ch_bam_em = BAM_FILTER.out.bam
+        ch_filter_bam = BAM_FILTER.out.bam
     }
 
     emit:
-    bam      = ch_bam_em           // channel: [ val(meta), [ bam ] ]
+    bam      = ch_filter_bam           // channel: [ val(meta), [ bam ] ]
     versions = ch_versions                     // channel: [ versions.yml ]
 }
 
