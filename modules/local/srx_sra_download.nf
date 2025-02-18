@@ -21,6 +21,9 @@ process SRX_DOWNLOAD {
     def srr             = meta.run_accession
 
     """
+    # prefetch SRA file
+    prefetch --max-size 100G $srr
+    # download SRA file
     parallel-fastq-dump \\
             --sra-id $srr \\
             --threads $task.cpus \\

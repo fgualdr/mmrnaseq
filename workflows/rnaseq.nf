@@ -433,6 +433,7 @@ workflow RNASEQ {
     ch_aligner_clustering_multiqc = Channel.empty()
 
     if (!params.skip_alignment && params.aligner == 'star_salmon') {
+        
         ALIGN_STAR (
             ch_filtered_reads,
             PREPARE_GENOME.out.star_index,
@@ -684,7 +685,8 @@ workflow RNASEQ {
     INTRON_EXON_COUNT(
         ch_bam_genome_bai,
         PREP_GTF.out.txdb_sqlite,
-        PREP_GTF.out.metadata
+        PREP_GTF.out.metadata,
+        params.rmsker // this must by the repmask .out. files
     )
 
     count_rds = INTRON_EXON_COUNT.out.count_rds
@@ -693,6 +695,7 @@ workflow RNASEQ {
     // Filter the list to only include lists with more than one item
     ch_filtered = ch_all_rds.filter { it.size() > 1 }
     ch_filtered.view()
+
     if(!params.skip_bigwig && params.normalize && ch_filtered) {
     
         NORMALIZE_COUNTS_INTRON_EXON(
@@ -729,10 +732,11 @@ workflow RNASEQ {
 
     //
     // MODULE: Feature biotype QC using featureCounts
-    //
+    // Need to remove this..
     ch_featurecounts_multiqc = Channel.empty()
 
     if (!params.skip_alignment && !params.skip_qc && !params.skip_biotype_qc && biotype) {
+        
         PREPARE_GENOME
             .out
             .gtf

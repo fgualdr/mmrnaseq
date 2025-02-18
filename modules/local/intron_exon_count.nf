@@ -8,9 +8,11 @@ process INTRON_EXON_COUNT {
     tuple val(meta), path(bam), path(bai)
     path txdb_sqlite
     path metadata
+    path rmsker
 
     output:
-    path '*.rds', emit: count_rds
+    path '*.gene.rds', emit: count_rds
+    path '*.rmsk.rds', emit: rmsk_rds
 
     script:
     
@@ -27,6 +29,7 @@ process INTRON_EXON_COUNT {
     """
     intron_exon_count.r \\
             -q $txdb_sqlite \\
+            -r $rmsker \\
             -o './' \\
             -m $metadata \\
             -b $bam \\

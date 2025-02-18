@@ -487,6 +487,18 @@
                     "help_text": "By default, intermediate BAM files will not be saved. The final BAM files created after the appropriate filtering step are always saved to limit storage usage. Set this parameter to also save other intermediate BAM files.",
                     "fa_icon": "fas fa-save"
                 },
+                "save_final_bam": {
+                    "type": "boolean",
+                    "description": "Save the final BAM files from the alignment and filering step step.",
+                    "help_text": "By default these are saved. Set to false in order to remove BAM this option is usuful when screening thousands files from repository.",
+                    "fa_icon": "fas fa-save"
+                },
+                "save_rds_counts": {
+                    "type": "boolean",
+                    "description": "Save the RDS of individual sample counts this include genes and repeats",
+                    "help_text": "By default these are not saved. Set to true in order to save the files.",
+                    "fa_icon": "fas fa-save"
+                },
                 "skip_markduplicates": {
                     "type": "boolean",
                     "fa_icon": "fas fa-fast-forward",
