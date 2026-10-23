@@ -43,6 +43,7 @@ def parse_args():
     parser.add_argument('-o', '--output_file', help='Output to the folder where the output file will be saved', required=True)
     parser.add_argument('-m', '--max_iter', help='Max iterations of the EM algorithm (default = 1000)', default=1000, type=int)
     parser.add_argument('-c', '--convergence', help='Convergence value of the EM (default 1e-6)', default=1e-6, type=float)
+    parser.add_argument('--seed', type=int, default=1, help='Random seed used only for deterministic tie breaking in the legacy resolver')
     args = parser.parse_args()
     return args
 
@@ -187,7 +188,7 @@ if __name__ == '__main__':
     # Combine mat_multi and posterior
     mat_multi = pd.merge(mat_multi, posterior, on='target_id')
     # Shuffle the raws of the multi mappers - so that equal posterior per read_id are randomly selected
-    mat_multi = mat_multi.sample(frac=1).reset_index(drop=True)
+    mat_multi = mat_multi.sample(frac=1, random_state=args.seed).reset_index(drop=True)
     # Sort by posterior so that higher posterior are first
     mat_multi = mat_multi.sort_values(by=['posterior'], ascending=False)
     # select the most probable target per read_id frop those with 0 posterior   

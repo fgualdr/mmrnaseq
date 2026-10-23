@@ -26,13 +26,15 @@ process BAM_EM {
     def eps = params.em_eps ? params.em_eps : 1e-6
     def iter = params.em_iter ? params.em_iter : 1000
     def processors = task.cpus
+    def seed = params.em_seed ?: 1
     """
  
     em_algorithm_bedpe_sm_bis.py \\
         -i $labeled_bedpe \\
         -o ./ \\
         -m $iter \\
-        -c $eps
+        -c $eps \
+        --seed $seed
 
 
     cat <<-END_VERSIONS > versions.yml

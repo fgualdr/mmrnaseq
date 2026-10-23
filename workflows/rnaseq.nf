@@ -693,16 +693,18 @@ workflow RNASEQ {
     ch_all_rds = count_rds.toList()
     ch_all_rds.view()
     // Filter the list to only include lists with more than one item
-    ch_filtered = ch_all_rds.filter { it.size() > 1 }
-    ch_filtered.view()
+    ch_rds_for_normalization = ch_all_rds.filter { rds_list ->
+        rds_list.size() > 1
+    }
 
-    if(!params.skip_bigwig && params.normalize && ch_filtered) {
-    
+    if(!params.skip_bigwig && params.normalize) {
+
         NORMALIZE_COUNTS_INTRON_EXON(
-            ch_all_rds,
+            ch_rds_for_normalization,
             ch_pca_header_multiqc,
             ch_clustering_header_multiqc
         )
+
 
         ch_aligner_pca_multiqc        = NORMALIZE_COUNTS_INTRON_EXON.out.pca_multiqc
         ch_aligner_clustering_multiqc = NORMALIZE_COUNTS_INTRON_EXON.out.dists_multiqc

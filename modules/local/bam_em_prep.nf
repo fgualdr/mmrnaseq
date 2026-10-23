@@ -26,7 +26,7 @@ process BAM_EM_PREP {
     // convert to megabytes the memory available
     def avail_mem = task.memory ? task.memory.mega : false
     // sort memory is the available memory minus 1GB divided by the number of cpus
-    def sort_memory = avail_mem ? ((avail_mem - (1000*task.cpus)) /task.cpus).intValue() : 2000
+    def sort_memory = avail_mem ? Math.max(256, ((avail_mem - 1000) / task.cpus).intValue()) : 2000
     def single_end = meta.single_end
     def strandedness = 0
     if (meta.strandedness == 'forward') {
@@ -38,7 +38,7 @@ process BAM_EM_PREP {
     if(strandedness == 0){
         if(single_end){
             """
-            dist_r=2000
+            dist_r=${params.em_hotspot_distance ?: 2000}
 
             # Add the HI:i bit to each
             samtools view -h $bam | awk 'BEGIN{OFS="\\t"} \$1~/^@/{print;next} {for(i=12;i<=NF;i++){if(\$i~/^HI:i:/){ \$1=\$1"_"\$i}};print}' | samtools view -bS - > ${prefix}.labeled.bam
@@ -51,7 +51,7 @@ process BAM_EM_PREP {
         
             # Generate the files required for the EM step:
             # Separate multi from single - this is done on the BAM first then on the BEDPE
-            samtools view -h ${prefix}.labeled.nsort.bam | grep -v 'NH:i:1'  | samtools view -bS - > ${prefix}.labeled.multi.bam
+            samtools view -h ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\t"} /^@/{print;next} {nh=0; for(i=12;i<=NF;i++){if(\$i~/^NH:i:/){split(\$i,a,":"); nh=a[3]+0}} if(nh>1) print}' | samtools view -bS - > ${prefix}.labeled.multi.bam
             bedtools bamtobed -i ${prefix}.labeled.multi.bam > ${prefix}.labeled.nsort.multi.bed
 
             # Hotspots
@@ -68,6 +68,7 @@ process BAM_EM_PREP {
                     -a ${prefix}.labeled.sort.bed \\
                     -b ${prefix}.multi.hotspots.bed \\
                     -sorted \\
+                    -f ${overlap} \\
                     -wo -loj > ${prefix}.nsort.match.bed
             
             # Replace the no match "." with "id_nomatch"
@@ -91,7 +92,7 @@ process BAM_EM_PREP {
             """
         }else{
             """
-            dist_r=2000
+            dist_r=${params.em_hotspot_distance ?: 2000}
 
             # Add the HI:i bit to each
             samtools view -h $bam | awk 'BEGIN{OFS="\\t"} \$1~/^@/{print;next} {for(i=12;i<=NF;i++){if(\$i~/^HI:i:/){ \$1=\$1"_"\$i}};print}' | samtools view -bS - > ${prefix}.labeled.bam
@@ -104,7 +105,7 @@ process BAM_EM_PREP {
         
             # Generate the files required for the EM step:
             # Separate multi from single - this is done on the BAM first then on the BEDPE
-            samtools view -h ${prefix}.labeled.nsort.bam | grep -v 'NH:i:1'  | samtools view -bS - > ${prefix}.labeled.multi.bam
+            samtools view -h ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\t"} /^@/{print;next} {nh=0; for(i=12;i<=NF;i++){if(\$i~/^NH:i:/){split(\$i,a,":"); nh=a[3]+0}} if(nh>1) print}' | samtools view -bS - > ${prefix}.labeled.multi.bam
             bedtools bamtobed -i ${prefix}.labeled.multi.bam -bedpe > ${prefix}.labeled.nsort.multi.bedpe 
 
             # Hotspots
@@ -123,6 +124,7 @@ process BAM_EM_PREP {
                     -a ${prefix}.labeled.sort.bed \\
                     -b ${prefix}.multi.hotspots.bed \\
                     -sorted \\
+                    -f ${overlap} \\
                     -wo -loj > ${prefix}.nsort.match.bed
             
             # Replace the no match "." with "id_nomatch"
@@ -149,7 +151,7 @@ process BAM_EM_PREP {
         if(single_end){
             """
             ### Check properly !!!!!!!!!!!
-            dist_r=2000
+            dist_r=${params.em_hotspot_distance ?: 2000}
 
             # Add the HI:i bit to each
             samtools view -h $bam | awk 'BEGIN{OFS="\\t"} \$1~/^@/{print;next} {for(i=12;i<=NF;i++){if(\$i~/^HI:i:/){ \$1=\$1"_"\$i}};print}' | samtools view -bS - > ${prefix}.labeled.bam
@@ -169,7 +171,7 @@ process BAM_EM_PREP {
             cut -f 1,2,3,4 ${prefix}.fwd.nsort.bedpe > ${prefix}.fwd.nsort.bed
 
             # Separate multi from single:
-            samtools view -h ${prefix}.fwd.nsort.bam | grep -v 'NH:i:1'  | samtools view -bS - > ${prefix}.labeled.multi.fwd.bam
+            samtools view -h ${prefix}.fwd.nsort.bam | awk 'BEGIN{OFS="\t"} /^@/{print;next} {nh=0; for(i=12;i<=NF;i++){if(\$i~/^NH:i:/){split(\$i,a,":"); nh=a[3]+0}} if(nh>1) print}' | samtools view -bS - > ${prefix}.labeled.multi.fwd.bam
             bedtools bamtobed -i ${prefix}.labeled.multi.fwd.bam > ${prefix}.fwd.nsort.multi.bedpe 
 
             cut -f 1,2,3,4 ${prefix}.fwd.nsort.multi.bedpe > ${prefix}.fwd.multi.bed
@@ -185,6 +187,7 @@ process BAM_EM_PREP {
                     -a ${prefix}.fwd.sort.bed \\
                     -b ${prefix}.fwd.multi.sort.merged.named.bed \\
                     -sorted \\
+                    -f ${overlap} \\
                     -wo -loj > ${prefix}.fwd.nsort.match.bed
 
             # Reverse strand
@@ -193,12 +196,12 @@ process BAM_EM_PREP {
             samtools index ${prefix}.rev.bam
 
             samtools sort -@ $task.cpus -m ${sort_memory}M -n -o ${prefix}.rev.nsort.bam -T ${prefix}.rev.nsort ${prefix}.rev.bam
-            bedtools bamtobed -i ${prefix}.rev.nsort.bam -bedpe > ${prefix}.rev.nsort.bedpe 
+            bedtools bamtobed -i ${prefix}.rev.nsort.bam > ${prefix}.rev.nsort.bedpe 
             cut -f 1,2,3,4 ${prefix}.rev.nsort.bedpe > ${prefix}.rev.nsort.bed
 
             # Separate multi from single:
-            samtools view -h ${prefix}.rev.nsort.bam | grep -v 'NH:i:1'  | samtools view -bS - > ${prefix}.labeled.multi.rev.bam
-            bedtools bamtobed -i ${prefix}.labeled.multi.rev.bam -bedpe > ${prefix}.rev.nsort.multi.bedpe 
+            samtools view -h ${prefix}.rev.nsort.bam | awk 'BEGIN{OFS="\t"} /^@/{print;next} {nh=0; for(i=12;i<=NF;i++){if(\$i~/^NH:i:/){split(\$i,a,":"); nh=a[3]+0}} if(nh>1) print}' | samtools view -bS - > ${prefix}.labeled.multi.rev.bam
+            bedtools bamtobed -i ${prefix}.labeled.multi.rev.bam > ${prefix}.rev.nsort.multi.bedpe 
 
             cut -f 1,2,3,4 ${prefix}.rev.nsort.multi.bedpe > ${prefix}.rev.multi.bed
             sort --parallel=$task.cpus -k1,1 -k2,2n ${prefix}.rev.multi.bed > ${prefix}.rev.multi.sort.bed
@@ -212,6 +215,7 @@ process BAM_EM_PREP {
                     -a ${prefix}.rev.sort.bed \\
                     -b ${prefix}.rev.multi.sort.merged.named.bed \\
                     -sorted \\
+                    -f ${overlap} \\
                     -wo -loj > ${prefix}.rev.nsort.match.bed
 
             #################################
@@ -235,7 +239,7 @@ process BAM_EM_PREP {
         }else{
             """
             
-            dist_r=2000
+            dist_r=${params.em_hotspot_distance ?: 2000}
 
             # Add the HI:i bit to each
             samtools view -h $bam | awk 'BEGIN{OFS="\\t"} \$1~/^@/{print;next} {for(i=12;i<=NF;i++){if(\$i~/^HI:i:/){ \$1=\$1"_"\$i}};print}' | samtools view -bS - > ${prefix}.labeled.bam
@@ -259,7 +263,7 @@ process BAM_EM_PREP {
             cut -f 1,2,6,7 ${prefix}.fwd.nsort.bedpe > ${prefix}.fwd.nsort.bed
 
             # Separate multi from single:
-            samtools view -h ${prefix}.fwd.nsort.bam | grep -v 'NH:i:1'  | samtools view -bS - > ${prefix}.labeled.multi.fwd.bam
+            samtools view -h ${prefix}.fwd.nsort.bam | awk 'BEGIN{OFS="\t"} /^@/{print;next} {nh=0; for(i=12;i<=NF;i++){if(\$i~/^NH:i:/){split(\$i,a,":"); nh=a[3]+0}} if(nh>1) print}' | samtools view -bS - > ${prefix}.labeled.multi.fwd.bam
             bedtools bamtobed -i ${prefix}.labeled.multi.fwd.bam -bedpe > ${prefix}.fwd.nsort.multi.bedpe 
 
             cut -f 1,2,6 ${prefix}.fwd.nsort.multi.bedpe > ${prefix}.fwd.multi.bed
@@ -275,6 +279,7 @@ process BAM_EM_PREP {
                     -a ${prefix}.fwd.sort.bed \\
                     -b ${prefix}.fwd.multi.sort.merged.named.bed \\
                     -sorted \\
+                    -f ${overlap} \\
                     -wo -loj > ${prefix}.fwd.nsort.match.bed
 
             # Reverse strand
@@ -288,12 +293,12 @@ process BAM_EM_PREP {
             samtools index ${prefix}.rev.bam
 
             samtools sort -@ $task.cpus -m ${sort_memory}M -n -o ${prefix}.rev.nsort.bam -T ${prefix}.rev.nsort ${prefix}.rev.bam
-            bedtools bamtobed -i ${prefix}.rev.nsort.bam -bedpe > ${prefix}.rev.nsort.bedpe 
+            bedtools bamtobed -i ${prefix}.rev.nsort.bam > ${prefix}.rev.nsort.bedpe 
             cut -f 1,2,6,7 ${prefix}.rev.nsort.bedpe > ${prefix}.rev.nsort.bed
 
             # Separate multi from single:
-            samtools view -h ${prefix}.rev.nsort.bam | grep -v 'NH:i:1'  | samtools view -bS - > ${prefix}.labeled.multi.rev.bam
-            bedtools bamtobed -i ${prefix}.labeled.multi.rev.bam -bedpe > ${prefix}.rev.nsort.multi.bedpe 
+            samtools view -h ${prefix}.rev.nsort.bam | awk 'BEGIN{OFS="\t"} /^@/{print;next} {nh=0; for(i=12;i<=NF;i++){if(\$i~/^NH:i:/){split(\$i,a,":"); nh=a[3]+0}} if(nh>1) print}' | samtools view -bS - > ${prefix}.labeled.multi.rev.bam
+            bedtools bamtobed -i ${prefix}.labeled.multi.rev.bam > ${prefix}.rev.nsort.multi.bedpe 
 
             cut -f 1,2,6 ${prefix}.rev.nsort.multi.bedpe > ${prefix}.rev.multi.bed
             sort --parallel=$task.cpus -k1,1 -k2,2n ${prefix}.rev.multi.bed > ${prefix}.rev.multi.sort.bed
@@ -307,6 +312,7 @@ process BAM_EM_PREP {
                     -a ${prefix}.rev.sort.bed \\
                     -b ${prefix}.rev.multi.sort.merged.named.bed \\
                     -sorted \\
+                    -f ${overlap} \\
                     -wo -loj > ${prefix}.rev.nsort.match.bed
 
             #################################

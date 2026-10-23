@@ -1,4 +1,4 @@
-{ 
+{
     "$schema": "http://json-schema.org/draft-07/schema",
     "$id": "https://raw.githubusercontent.com/nf-core/rnaseq/master/nextflow_schema.json",
     "title": "nf-core/rnaseq pipeline parameters",
@@ -12,10 +12,16 @@
             "description": "Define where the pipeline should find input data and save output data.",
             "anyOf": [
                 {
-                    "required": ["input", "outdir"]
+                    "required": [
+                        "input",
+                        "outdir"
+                    ]
                 },
                 {
-                    "required": ["public_data_ids", "outdir"]
+                    "required": [
+                        "public_data_ids",
+                        "outdir"
+                    ]
                 }
             ],
             "properties": {
@@ -55,8 +61,15 @@
                     "type": "integer",
                     "description": "Read length used to calculate MACS2 genome size for peak calling if `--macs_gsize` isn't provided.",
                     "fa_icon": "fas fa-chart-area",
-                    "enum": [50, 60, 75, 100, 150, 200]
-                }, 
+                    "enum": [
+                        50,
+                        60,
+                        75,
+                        100,
+                        150,
+                        200
+                    ]
+                },
                 "multiqc_title": {
                     "type": "string",
                     "description": "MultiQC report title. Printed as page header, used for filename if not otherwise specified.",
@@ -118,7 +131,13 @@
                     "default": "directional",
                     "fa_icon": "far fa-object-ungroup",
                     "description": "Method to use to determine read groups by subsuming those with similar UMIs. All methods start by identifying the reads with the same mapping position, but treat similar yet nonidentical UMIs differently.",
-                    "enum": ["unique", "percentile", "cluster", "adjacency", "directional"]
+                    "enum": [
+                        "unique",
+                        "percentile",
+                        "cluster",
+                        "adjacency",
+                        "directional"
+                    ]
                 },
                 "umitools_dedup_stats": {
                     "type": "boolean",
@@ -358,7 +377,10 @@
                     "default": "trimgalore",
                     "description": "Specifies the trimming tool to use - available options are 'trimgalore' and 'fastp'.",
                     "fa_icon": "fas fa-cut",
-                    "enum": ["trimgalore", "fastp"]
+                    "enum": [
+                        "trimgalore",
+                        "fastp"
+                    ]
                 },
                 "extra_trimgalore_args": {
                     "type": "string",
@@ -413,13 +435,19 @@
                     "default": "star_salmon",
                     "description": "Specifies the alignment algorithm to use - available options are 'star_salmon', 'star_rsem' and 'hisat2'.",
                     "fa_icon": "fas fa-map-signs",
-                    "enum": ["star_salmon", "star_rsem", "hisat2"]
+                    "enum": [
+                        "star_salmon",
+                        "star_rsem",
+                        "hisat2"
+                    ]
                 },
                 "pseudo_aligner": {
                     "type": "string",
                     "description": "Specifies the pseudo aligner to use - available options are 'salmon'. Runs in addition to '--aligner'.",
                     "fa_icon": "fas fa-hamburger",
-                    "enum": ["salmon"]
+                    "enum": [
+                        "salmon"
+                    ]
                 },
                 "bam_csi_index": {
                     "type": "boolean",
@@ -531,6 +559,24 @@
                     "type": "boolean",
                     "fa_icon": "fas fa-fast-forward",
                     "description": "Skip all of the alignment-based processes within the pipeline."
+                },
+                "em_seed": {
+                    "type": "integer",
+                    "default": 1,
+                    "description": "Random seed for deterministic resolver tie handling."
+                },
+                "em_hotspot_distance": {
+                    "type": "integer",
+                    "default": 2000,
+                    "minimum": 0,
+                    "description": "Distance in bp used by bedtools merge when constructing the v1 multimapper hotspot prior regions."
+                },
+                "label_overlap": {
+                    "type": "number",
+                    "default": 0.25,
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "description": "Minimum fraction of a read/fragment interval that must overlap a hotspot when assigning it to the local prior region."
                 }
             }
         },
@@ -570,7 +616,6 @@
                     "default": 1,
                     "description": "Number of sigmas to include invariant features"
                 },
-
                 "n_pop": {
                     "type": "integer",
                     "default": 1,
@@ -749,7 +794,14 @@
                     "description": "Method used to save pipeline results to output directory.",
                     "help_text": "The Nextflow `publishDir` option specifies which intermediate files should be saved to the output directory. This option tells the pipeline what method should be used to move these files. See [Nextflow docs](https://www.nextflow.io/docs/latest/process.html#publishdir) for details.",
                     "fa_icon": "fas fa-copy",
-                    "enum": ["symlink", "rellink", "link", "copy", "copyNoFollow", "move"],
+                    "enum": [
+                        "symlink",
+                        "rellink",
+                        "link",
+                        "copy",
+                        "copyNoFollow",
+                        "move"
+                    ],
                     "hidden": true
                 },
                 "email_on_fail": {
