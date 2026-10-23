@@ -59,8 +59,10 @@ def check_samplesheet(file_in, file_out):
             print(f"ERROR: Please check samplesheet header -> {','.join(header)} != {','.join(HEADER)}")
             sys.exit(1)
 
+        
         ## Check sample entries
         for line in fin:
+            # to inspect line=
             if line.strip():
                 lspl = [x.strip().strip('"') for x in line.strip().split(",")]
 
@@ -118,30 +120,25 @@ def check_samplesheet(file_in, file_out):
                 # the default is paired end sequencing at IEO
                 # Given the way the crisper screen library is designed R1 and R2 must be present! Check:
                 p=Path(path)
+                ## collect all files ending in .fastq.gz recursively:
+                all_fastq= list(p.glob('**/*.fastq.gz'))
                 # here we consider the "lanes" in case issues associated to the NOVASeq lanes are present.
                 # lanes can have values in any, or the L001, L002, ... 
                 # Illumina outputs include: "_L002_R1_001.fastq.gz"
                 ## Create sample mapping dictionary = {sample: [[ single_end, fastq_1, fastq_2, strandedness ]]}
                 lanes=lanes.strip().split(":")
-                if any(x!='any' for (x) in lanes) and any(x.startswith('L00') for (x) in lanes) and any(x[-1].isdigit() for (x) in lanes):
+                if any(x!='any' for (x) in lanes) and any(x.startswith('_L00') for (x) in lanes) and any(x[-1].isdigit() for (x) in lanes):
                     print("Proceed with specified lanes:")
-                    # in here we need to split by common partial match:
-                    # Important the Lanes must be in the folder specified!
-                    subfolders = list(p.glob("*"+rid+"*"+sid+"*"))
-                    search = '*fastq.gz'
-                    fastqs = list(subfolders[0].glob('**/' + search))
-                    if len(fastqs) == 0:
-                        print_error(
-                                f"The path provided does not contain the files as RID+SID",
-                                "path:",
-                                path
-                            )
-                        
+                    
                     for ll in lanes:
-                        search = "*"+rid+"*"+sid+'*'+ll+'*_R1*fastq.gz'
-                        fastqs_1 = list(subfolders[0].glob('**/' +search))
-                        search = "*"+rid+"*"+sid+'*'+ll+'*_R2*fastq.gz'
-                        fastqs_2 = list(subfolders[0].glob('**/' +search))
+
+                        # Create the pattern directly
+                        search_pattern1 = f"**/*{rid}*{sid}*{ll}*_R1*fastq.gz"
+                        # Use glob directly
+                        fastqs_1 = list(p.glob(search_pattern1))
+                        
+                        search_pattern2 = f"**/*{rid}*{sid}*{ll}*_R2*fastq.gz"
+                        fastqs_2 = list(p.glob(search_pattern2))
                         
                         ## Auto-detect paired-end/single-end
                         sample_info = []  ## [single_end, fastq_1, fastq_2, strandedness]
@@ -163,17 +160,16 @@ def check_samplesheet(file_in, file_out):
                                 sample_mapping_dict[sample].append(sample_info)
                 elif all(x=='any' for (x) in lanes):
                     print("Proceed with all lanes:")
-                    # we need to get to the unique elements of "Lanes"
-                    subfolders = list(p.glob("*"+rid+"*"+sid+"*"))
-                    print(subfolders[0])
-                    search = '*_R1*fastq.gz'
-                    fastqs = list(subfolders[0].glob('**/' + search))
                     
-                    # As are any we remove all text after the _R1 so we keep all the text of the path until the _R 
+                    # Create the pattern directly
+                    search_pattern1 = f"**/*{rid}*{sid}*_L00*_R1*fastq.gz"
+                    # Use glob directly
+                    fastqs_1 = list(p.glob(search_pattern1))
+
+                    # we remove all text after the _R1 so we keep all the text of the path until the _R 
                     #fastqs = [ re.sub(r'^.*?_L', 'L', str(x)).split('_')[0] for x in fastqs]
-                    fastqs = [x.name.split('_R1')[0] for x in fastqs]
-                    print(fastqs)
-            
+                    fastqs = [x.name.rsplit("_R", 1)[0] for x in fastqs_1]
+
                     if len(fastqs) == 0:
                         print_error(
                                 f"The path provided does not contain the files as RID+SID",
@@ -184,10 +180,10 @@ def check_samplesheet(file_in, file_out):
                     for ll in fastqs:
                         print(ll)
                         #"*"+rid+"*"+sid+'*'+
-                        search = ll+'*_R1*fastq.gz'
-                        fastqs_1 = list(subfolders[0].glob('**/' +search))
-                        search = ll+'*_R2*fastq.gz'
-                        fastqs_2 = list(subfolders[0].glob('**/' +search))
+                        search1 = f"**/*{ll}*_R1*fastq.gz"
+                        fastqs_1 = list(p.glob(search1))
+                        search2 = f"**/*{ll}*_R2*fastq.gz"
+                        fastqs_2 = list(p.glob(search2))
 
                         # check if fastqs_1 is not empty
                         if len(fastqs_1) > 0:

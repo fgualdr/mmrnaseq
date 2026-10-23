@@ -1,5 +1,12 @@
 /*
- * Filter BAM file
+ * Basic BAM filtering before multimapper resolution.
+ *
+ * RNA-seq note:
+ * We intentionally do NOT filter paired-end RNA alignments by |TLEN|. TLEN is the
+ * genomic outer span of a pair and therefore includes introns; a fixed 50 kb TLEN
+ * threshold removes biologically valid long-intron fragments. Spurious splice
+ * junctions are instead controlled in the STAR alignment step (BySJout and splice
+ * junction filters; see conf/modules.config).
  */
 process BAM_FILTER {
     tag "$meta.id"
@@ -15,29 +22,20 @@ process BAM_FILTER {
 
     output:
     tuple val(meta), path("*.filter2.bam"), emit: bam
-    path "versions.yml"           , emit: versions
+    path "versions.yml"                    , emit: versions
 
     script:
+    def prefix = task.ext.prefix ?: "${meta.id}"
 
-    def prefix           = task.ext.prefix ?: "${meta.id}"
-    def filter_params    = meta.single_end ? '-F 0x004' : '-F 0x004 -F 0x0008 -f 0x001 -f 0x002' // proper pair selection!!
+    // Keep all mapped alignments for SE. For PE, require a mapped, properly paired
+    // fragment with both mates mapped. Secondary alignments are deliberately retained
+    // because they are candidate loci for the multimapper resolver.
+    def filter_params = meta.single_end ? '-F 0x004' : '-f 0x003 -F 0x00C'
 
     """
-    # we set the maximum allowed insert_size to a fixed 50kb
-    max_frag=50000
-    
-    # General filtering of the bam
     samtools view \\
         $filter_params \\
-        -b $bam > ${prefix}.filter1.bam
-
-    # Filter those pairs that have insert size compatible with the fragment length:
-    # For the RNAseq this is set to 5 times the mimum gettin 90% of the data ~ 10kb *5
-    # This will be possible to set it accordingly to the longer interon or the tapestation data
-    
-    samtools view -h ${prefix}.filter1.bam | \\
-    awk -v var="\$max_frag" '{if(substr(\$0,1,1)=="@" || ((\$9>=0?\$9:-\$9)<=var)) print \$0}' | \\
-    samtools view -b > ${prefix}.filter2.bam
+        -b $bam > ${prefix}.filter2.bam
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

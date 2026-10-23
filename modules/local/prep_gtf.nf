@@ -1,8 +1,8 @@
 process PREP_GTF {
     tag "$gtf"
     label 'process_medium'
-
-    container 'docker://fgualdr/envr_norm_gr'
+    
+    container 'docker://fgualdr/prep_gtf_gff'
 
     input:
     path gtf
@@ -16,7 +16,8 @@ process PREP_GTF {
     when:
     task.ext.when == null || task.ext.when
 
-    script: // This script is bundled with the pipeline, in nf-core/rnaseq/bin/
+    script: 
+
     """
     gtf_prep.r \\
             -g ${gtf} \\

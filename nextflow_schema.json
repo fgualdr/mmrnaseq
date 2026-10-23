@@ -454,6 +454,29 @@
                     "description": "Perform reference-guided de novo assembly of transcripts using StringTie i.e. dont restrict to those in GTF file.",
                     "fa_icon": "fas fa-ban"
                 },
+                "star_multimap_max": {
+                    "type": "integer",
+                    "default": 500,
+                    "minimum": 1,
+                    "description": "Maximum number of genomic loci a read or fragment may map to and still be retained by STAR for downstream multimapper resolution.",
+                    "help_text": "Controls both STAR --outFilterMultimapNmax and --winAnchorMultimapNmax. Reads/fragments with more loci are classified by STAR as mapped to too many loci and are not resolved in the v1 method. The default is 500, but the user can change it, for example --star_multimap_max 1000.",
+                    "fa_icon": "fas fa-sitemap"
+                },
+                "star_multimap_score_range": {
+                    "type": "integer",
+                    "default": 1,
+                    "minimum": 0,
+                    "description": "STAR alignment-score window below the best alignment within which alternative multimapping candidates are retained.",
+                    "help_text": "Passed to --outFilterMultimapScoreRange. Keep the conservative STAR default of 1 for Patch 1; this parameter will be benchmarked when AS-weighted likelihoods are introduced in Patch 2.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "star_filter_spurious_junctions": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Use STAR splice-junction-aware filtering instead of filtering RNA-seq pairs by genomic TLEN after alignment.",
+                    "help_text": "When true, STAR uses --outFilterType BySJout, --alignSJoverhangMin 8 and --outFilterIntronMotifs RemoveNoncanonicalUnannotated. This reduces weak/spurious unannotated splice junctions while preserving valid long introns. Set false only for explicit benchmarking or compatibility tests.",
+                    "fa_icon": "fas fa-filter"
+                },
                 "extra_star_align_args": {
                     "type": "string",
                     "description": "Extra arguments to pass to STAR alignment command in addition to defaults defined by the pipeline.",
@@ -479,7 +502,7 @@
                     "type": "integer",
                     "default": 1000,
                     "description": "maximum iterations",
-                    "help_text": "The default will be 1000",
+                    "help_text": "The default will be 1000"
                 },
                 "save_align_intermeds": {
                     "type": "boolean",

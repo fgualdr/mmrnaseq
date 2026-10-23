@@ -81,6 +81,5 @@ def check_fastq_files(meta, fastq) {
         exit 1, "ERROR: ${meta_new.id} , has no _1.fastq.gz or _2.fastq.gz files"
     }
     return fastq_meta
-    
 }
 

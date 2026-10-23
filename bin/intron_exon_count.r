@@ -37,6 +37,18 @@ option_list <- list(
 
 opt <- parse_args(OptionParser(option_list=option_list))
 
+# opt <- list(
+#     txdb_sqlite = "./TxDB.sqlite",
+#     rmsker = "./hg38.fa.out.gz",
+#     meta = "./metadata.txt",
+#     output = "./",
+#     id = "DONOR3_24h_SKAP2_KO_R2",
+#     bam = "./DONOR3_24h_SKAP2_KO_R2.em.mark.filt.sorted.bam",
+#     strand = "reverse",
+#     paired_end = "paired",
+#     cpus = 10
+# )
+
 cpus = as.numeric(opt$cpus)
 
 # Load the txdb_sqlite file
@@ -53,8 +65,35 @@ UTR3ByTranscript <- threeUTRsByTranscript(txdb, use.names=TRUE)
 # Now we count the reads in the exons, introns and transcripts - consider the type of strandness
 
 bamfile <- BamFile(opt$bam, yieldSize=1000000)
-
-param <- NULL
+os <- Sys.info()["sysname"]
+if (os == "Linux") {
+    print("The system is Linux.")
+    BiocParallel::register(MulticoreParam(workers=cpus, 
+                                 tasks=0, 
+                                 stop.on.error=TRUE, 
+                                 progressbar=TRUE))
+} else if (os == "Darwin") {
+    print("The system is macOS (Darwin).")
+    BiocParallel::register(MulticoreParam(workers=cpus, 
+                                 tasks=0, 
+                                 stop.on.error=TRUE, 
+                                 progressbar=TRUE))
+} else if (os == "Windows") {
+    print("The system is Windows.")
+    # For Windows, we use SnowParam with type "SOCK"
+    BiocParallel::register(SnowParam(workers=cpus, 
+                                 tasks=0, 
+                                 stop.on.error=TRUE, 
+                                 progressbar=TRUE, 
+                                 type="SOCK"))
+} else {
+    print(paste("Unknown system:", os))
+    BiocParallel::register(SnowParam(workers=cpus, 
+                                 tasks=0, 
+                                 stop.on.error=TRUE, 
+                                 progressbar=TRUE, 
+                                 type="SOCK"))
+}
 
 # In summarizeOverlaps, we set preprocess.reads to invertStrand, which will reverse the strand of each read before counting it when:
 # protocols that lead to the strand of the first read being the opposite to that of the original RNA (1st family): dUTP, NSR, NNSR, Illumina stranded TruSeq PE protocol
@@ -90,8 +129,7 @@ se_all <- summarizeOverlaps(features=TxbyGene,
     singleEnd=singleEnd,
     ignore.strand=ignorestrand, 
     preprocess.reads=strandfun,
-    inter.feature=FALSE,
-    param=param)
+    inter.feature=FALSE)
 
 se_int <- summarizeOverlaps(features=IntronByGene,
     reads=bamfile,
@@ -99,8 +137,7 @@ se_int <- summarizeOverlaps(features=IntronByGene,
     singleEnd=singleEnd,
     ignore.strand=ignorestrand, 
     preprocess.reads=strandfun,
-    inter.feature=FALSE,
-    param=param)
+    inter.feature=FALSE)
 
 se_exonic <- summarizeOverlaps(features=ExonByGene,
     reads=bamfile,
@@ -108,8 +145,7 @@ se_exonic <- summarizeOverlaps(features=ExonByGene,
     singleEnd=singleEnd,
     ignore.strand=ignorestrand, 
     preprocess.reads=strandfun,
-    inter.feature=FALSE,
-    param=param)
+    inter.feature=FALSE)
 
 se_5_utr <- summarizeOverlaps(features=UTR5ByTranscript,
     reads=bamfile,
@@ -117,8 +153,7 @@ se_5_utr <- summarizeOverlaps(features=UTR5ByTranscript,
     singleEnd=singleEnd,
     ignore.strand=ignorestrand, 
     preprocess.reads=strandfun,
-    inter.feature=FALSE,
-    param=param)
+    inter.feature=FALSE)
 
 se_3_utr <- summarizeOverlaps(features=UTR3ByTranscript,
     reads=bamfile,
@@ -126,8 +161,7 @@ se_3_utr <- summarizeOverlaps(features=UTR3ByTranscript,
     singleEnd=singleEnd,
     ignore.strand=ignorestrand, 
     preprocess.reads=strandfun,
-    inter.feature=FALSE,
-    param=param)
+    inter.feature=FALSE)
 
 # Now we can extract the counts from the summarized experiment
 
@@ -177,102 +211,63 @@ rmksGR = makeGRangesFromDataFrame(  rmsk,
                                     strand.field="strand",
                                     keep.extra.columns=TRUE
                                     )
-names(rmksGR) = paste0(
-        seqnames(rmksGR),
-        ":",
-        start(rmksGR),
-        "-",
-        end(rmksGR),
-        "_",
-        strand(rmksGR),
-        "_",
-        rmksGR$repClassFamily,
-        "_",
-        rmksGR$repName
-    )
+# Keep seqlevels only in the txdb
+rmksGR <- rmksGR[seqnames(rmksGR) %in% seqlevels(seq_infos)]
+# Drop unused seqlevels
+seqlevels(rmksGR) <- seqlevels(seq_infos)
+seqinfo(rmksGR) = seq_infos
+rmksGR = trim(rmksGR)
+
+names(rmksGR) = paste0(seqnames(rmksGR),":",start(rmksGR),"-",end(rmksGR),"_",strand(rmksGR),"_",rmksGR$repClassFamily,"_",rmksGR$repName)
+
 rmksGR$id_row = names(rmksGR)
 ## UP/DOWN: relative to the elements
 # we get the 
-w_width = width(rmksGR)
+
+w_width = width(rmksGR) # consider 30% of the width of the element so either upstream of it or downstream of it
+w_width = round(w_width * 0.3)
+
 rmksGR_upstream = rmksGR
 start(rmksGR_upstream) = start(rmksGR_upstream) - w_width
-end(rmksGR_upstream) = start(rmksGR_upstream) + w_width
+end(rmksGR_upstream) = start(rmksGR_upstream) 
+
 rmksGR_downstream = rmksGR
 end(rmksGR_downstream) = end(rmksGR_downstream) + w_width
-start(rmksGR_downstream) = end(rmksGR_downstream) - w_width
+start(rmksGR_downstream) = end(rmksGR_downstream)
+
+seqlevels(rmksGR_upstream) <- seqlevels(seq_infos)
+seqinfo(rmksGR_upstream) = seq_infos
+rmksGR_upstream = trim(rmksGR_upstream)
+
+seqlevels(rmksGR_downstream) <- seqlevels(seq_infos)
+seqinfo(rmksGR_downstream) = seq_infos
+rmksGR_downstream = trim(rmksGR_downstream)
+
 # Combine up downs
 rmksGR_updown = c(rmksGR_upstream, rmksGR_downstream)
-seqlevels(rmksGR_updown) <- seqlevels(seq_infos)
-seqinfo(rmksGR_updown) = seq_infos
-rmksGR_updown = trim(rmksGR_updown)
+rmksGR_updown = rmksGR_updown[order(rmksGR_updown$id_row)]
 
+# convert to a list
 rmksGR_updown = split(rmksGR_updown,rmksGR_updown$id_row)
 rmksGR_updown = GRangesList(rmksGR_updown)
 
 
 ## if the data is stranded we count the reads in the sense and antisense strand and add this information
 if(!ignorestrand){
-    if(opt$strand == "reverse"){
-        sense_reps <- summarizeOverlaps(features = rmksGR, 
-                                    reads = bamfile, 
-                                    mode="IntersectionStrict",
-                                    ignore.strand = ignorestrand, 
-                                    singleEnd = singleEnd, 
-                                    inter.feature = FALSE, 
-                                    preprocess.reads = invertStrand,
-                                    BPPARAM = bpparam)
-
-        asense_reps <- summarizeOverlaps(features = rmksGR, 
-                                    reads = bamfile, 
-                                    mode="IntersectionStrict",
-                                    ignore.strand = ignorestrand, 
-                                    singleEnd = singleEnd, 
-                                    inter.feature = FALSE, 
-                                    preprocess.reads= NULL,
-                                    BPPARAM = bpparam)
-
-        ## same for the flanking regions
-        sense_reps_updown <- summarizeOverlaps(features = rmksGR_updown, 
-                                    reads = bamfile, 
-                                    mode="IntersectionStrict",
-                                    ignore.strand = ignorestrand, 
-                                    singleEnd = singleEnd, 
-                                    inter.feature = FALSE, 
-                                    preprocess.reads = invertStrand,
-                                    BPPARAM = bpparam)
-
-        asense_reps_updown <- summarizeOverlaps(features = rmksGR_updown,
-                                    reads = bamfile, 
-                                    mode="IntersectionStrict",
-                                    ignore.strand = ignorestrand, 
-                                    singleEnd = singleEnd, 
-                                    inter.feature = FALSE, 
-                                    preprocess.reads= NULL,
-                                    BPPARAM = bpparam)
-
         
-        sense_reps <- as.data.frame(assay(sense_reps)) %>%
-            rownames_to_column( var = "id" )
-        asense_reps <- as.data.frame(assay(asense_reps)) %>%
-            rownames_to_column( var = "id" )
-        sense_reps_updown <- as.data.frame(assay(sense_reps_updown)) %>%
-            rownames_to_column( var = "id" )
-        asense_reps_updown <- as.data.frame(assay(asense_reps_updown)) %>%
-            rownames_to_column( var = "id" )
+        as_fun <- if(opt$strand == "reverse") {
+            NULL
+        } else {
+            invertStrand
+        }
 
-        ## We make a table with counts: sense, antisense, sense_updown, antisense_updown
-        dat_rmsk <- data.table::rbindlist(list(sense_reps, asense_reps, sense_reps_updown, asense_reps_updown), fill=TRUE)
-        colnames(dat_rmsk) <- c("id", "sense", "asense", "sense_updown", "asense_updown")
-
-    }else{
         sense_reps <- summarizeOverlaps(features = rmksGR, 
                                     reads = bamfile, 
                                     mode="IntersectionStrict",
                                     ignore.strand = ignorestrand, 
                                     singleEnd = singleEnd, 
                                     inter.feature = FALSE, 
-                                    preprocess.reads = NULL,
-                                    BPPARAM = bpparam)
+                                    preprocess.reads = strandfun)
 
         asense_reps <- summarizeOverlaps(features = rmksGR, 
                                     reads = bamfile, 
@@ -280,8 +275,7 @@ if(!ignorestrand){
                                     ignore.strand = ignorestrand, 
                                     singleEnd = singleEnd, 
                                     inter.feature = FALSE, 
-                                    preprocess.reads= invertStrand,
-                                    BPPARAM = bpparam)
+                                    preprocess.reads= as_fun)
 
         ## same for the flanking regions
         sense_reps_updown <- summarizeOverlaps(features = rmksGR_updown, 
@@ -290,8 +284,7 @@ if(!ignorestrand){
                                     ignore.strand = ignorestrand, 
                                     singleEnd = singleEnd, 
                                     inter.feature = FALSE, 
-                                    preprocess.reads = NULL,
-                                    BPPARAM = bpparam)
+                                    preprocess.reads = strandfun)
 
         asense_reps_updown <- summarizeOverlaps(features = rmksGR_updown,
                                     reads = bamfile, 
@@ -299,63 +292,64 @@ if(!ignorestrand){
                                     ignore.strand = ignorestrand, 
                                     singleEnd = singleEnd, 
                                     inter.feature = FALSE, 
-                                    preprocess.reads= invertStrand,
-                                    BPPARAM = bpparam)
+                                    preprocess.reads= as_fun)
+        
+        sense_reps <- as.data.frame(assay(sense_reps)) 
+        asense_reps <- as.data.frame(assay(asense_reps)) 
+        sense_reps_updown <- as.data.frame(assay(sense_reps_updown)) 
+        asense_reps_updown <- as.data.frame(assay(asense_reps_updown)) 
 
-        sense_reps <- as.data.frame(assay(sense_reps)) %>%
-            rownames_to_column( var = "id" )
-        asense_reps <- as.data.frame(assay(asense_reps)) %>%
-            rownames_to_column( var = "id" )
-        sense_reps_updown <- as.data.frame(assay(sense_reps_updown)) %>%
-            rownames_to_column( var = "id" )
-        asense_reps_updown <- as.data.frame(assay(asense_reps_updown)) %>%
-            rownames_to_column( var = "id" )
+        colnames(sense_reps) <- paste0(opt$id,"_sense")
+        colnames(asense_reps) <- paste0(opt$id,"_asense")
+        colnames(sense_reps_updown) <- paste0(opt$id,"_sense_flank")
+        colnames(asense_reps_updown) <- paste0(opt$id,"_asense_flank")
+        
+        # add width information
+        sense_reps$width_ss = width(rmksGR[rownames(sense_reps)])
+        asense_reps$width_as = width(rmksGR[rownames(asense_reps)])
+        
+        # for the flanking should be the length of the elements * 0.3 *2
+        w <- width(rmksGR[rownames(sense_reps_updown)])
+        sense_reps_updown$width_flank_ss = (w*0.3*2)
+        asense_reps_updown$width_flank_as = (w*0.3*2)
 
-        ## We make a table with counts: sense, antisense, sense_updown, antisense_updown
-        # combine by id
-        dat_rmsk <- data.table::rbindlist(list(sense_reps, asense_reps, sense_reps_updown, asense_reps_updown), fill=TRUE)
-        colnames(dat_rmsk) <- c("id", 
-                                paste0(opt$id,"_sense"), 
-                                paste0(opt$id,"_asense"), 
-                                paste0(opt$id,"_sense_updown"), 
-                                paste0(opt$id,"_asense_updown")
-                                )
-
-        # dat_rmsk = dat_rmsk[names(rmksGR) ,]
-    }
+        dat_rmsk <- list(
+            sense_count_reps = sense_reps,
+            asense__count_reps = asense_reps,
+            sense_count_flank = sense_reps_updown,
+            asense_count_flank = asense_reps_updown
+        )
 }else{
 
     se_all_reps <- summarizeOverlaps(features=rmksGR,
-    reads=bamfile,
-    mode="Union",
-    singleEnd=singleEnd,
-    ignore.strand=ignorestrand, 
-    preprocess.reads=strandfun,
-    inter.feature=FALSE,
-    param=param)
+                                    reads=bamfile,
+                                    mode="Union",
+                                    singleEnd=singleEnd,
+                                    ignore.strand=ignorestrand, 
+                                    preprocess.reads=strandfun,
+                                    inter.feature=FALSE)
 
     ## same for the flanking regions
     se_all_reps_updown <- summarizeOverlaps(features=rmksGR_updown,
-    reads=bamfile,
-    mode="Union",
-    singleEnd=singleEnd,
-    ignore.strand=ignorestrand,
-    preprocess.reads=strandfun,
-    inter.feature=FALSE,
-    param=param)
+                                            reads=bamfile,
+                                            mode="Union",
+                                            singleEnd=singleEnd,
+                                            ignore.strand=ignorestrand,
+                                            preprocess.reads=strandfun,
+                                            inter.feature=FALSE)
 
     # here we get the counts and make the table but will be "counts", "counts_updown"
-    dat_rmsk <- as.data.frame(assay(se_all_reps)) %>%
-        rownames_to_column( var = "id" )
-    dat_rmsk_updown <- as.data.frame(assay(se_all_reps_updown)) %>%
-        rownames_to_column( var = "id" )
+    dat_rmsk <- as.data.frame(assay(se_all_reps))
+    dat_rmsk_updown <- as.data.frame(assay(se_all_reps_updown))
 
-    colnames(dat_rmsk) <- c("id", paste0(opt$id,"_counts"))
-    colnames(dat_rmsk_updown) <- c("id", paste0(opt$id,"_counts_updown"))
-
-    dat_rmsk <- merge(dat_rmsk, dat_rmsk_updown, by="id", all=TRUE)
-    # dat_rmsk = dat_rmsk[names(rmksGR) ,]
-
+    colnames(dat_rmsk) <- paste0(opt$id,"_counts")
+    colnames(dat_rmsk_updown) <- paste0(opt$id,"_counts_flank")
+    dat_rmsk$width = width(rmksGR[rownames(dat_rmsk)])
+    dat_rmsk_updown$width_flank = (dat_rmsk$width*0.3*2)
+    dat_rmsk <- list(
+        count_reps = dat_rmsk,
+        count_flank = dat_rmsk_updown
+    )
 
 }
 

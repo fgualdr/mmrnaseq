@@ -18,8 +18,7 @@ library(optparse)
 # 2) output file path
 # 3) import n cores cpus
 
-# qsub -I -q nocg_interact -l select=1:ncpus=5:mem=80g
-# singularity shell -B /hpcnfs docker://fgualdr/envr_norm_gr
+
 # Aim is to workout the GTF file to combine by Tx and Gene and generate Exon GRagnes, All_features GRanges, and Intron+UTRs GRanges
 # The output will be a GRanges object with the following columns:
 option_list <- list(
@@ -32,15 +31,15 @@ opt <- parse_args(OptionParser(option_list=option_list))
 
 # To use this code from command line: 
 # Rscript gtf_prep.r 
+# salloc --ntasks=1 --cpus-per-task=10 --mem=60G --time=8:00:00
+# singularity shell -B /hpcnfs docker://fgualdr/prep_gtf_gff
+# docker://fgualdr/prep_gtf_gff
 # opt <- list()
-# opt$gtf = "/hpcnfs/data/GN2/fgualdrini/UsefullData/DB/Assembly/ncbi_dataset/data/GCF_009914755.1/GCF_009914755.1_T2T-CHM13v2.0_genomic.gtf"
+# opt$gtf = "/hpcnfs/data/GN2/fgualdrini/Master_batch_scripts/GDC_CCLE/CCLE/AVAILABLE_PE_TOTAL/ccle_geo/HSC2_GEO_list_cache/20/6e0fe70ea1c0a3bd6ebc20417a2f7b/UCSC.Homo_sapiens-GCA_009914755.4-2022_07-genes.gtf"
 # opt$out = "./"
-# opt$chrom_size = "/hpcnfs/scratch/temporary/fgualdr_ccle_test/work/f7/e714dd3b767835c4c5f0ab1ce46ef2/GCF_009914755.1_T2T-CHM13v2.0_genomic.fa.sizes"
+# opt$chrom_size = "/hpcnfs/data/GN2/fgualdrini/Master_batch_scripts/GDC_CCLE/CCLE/AVAILABLE_PE_TOTAL/ccle_geo/HSC2_GEO_list_cache/20/6e0fe70ea1c0a3bd6ebc20417a2f7b/hs1.fa.sizes"
 # opt$cpus = 5
-# -g /hpcnfs/data/GN2/fgualdrini/UsefullData/DB/Assembly/ncbi_dataset/data/GCF_009914755.1/GCF_009914755.1_T2T-CHM13v2.0_genomic.gtf 
-# -o './' 
-# -s /hpcnfs/scratch/temporary/fgualdr_ccle_test/work/f7/e714dd3b767835c4c5f0ab1ce46ef2/GCF_009914755.1_T2T-CHM13v2.0_genomic.fa.sizes
-# -c 5
+
 
 # Cusom functions:
 `%!in%` <- Negate(`%in%`)
@@ -57,8 +56,10 @@ fuzzyMatch = tolower(c("chrUn", "random", "v1", "v2", "kn707", "jtfh","nw_","nt_
 sex = tolower(c("chrX", "chrY","x","y","nc_060947.1","nc_060948.1"))
 
 # Read the GTF file
-gtf <- read.table(opt$gtf, sep="\t", header=FALSE, comment.char="#", stringsAsFactors=FALSE)
-chr = unique(gtf[,1])
+#gtf <- read.table(opt$gtf, sep="\t", header=FALSE, comment.char="#", stringsAsFactors=FALSE)
+gtf <- rtracklayer::import(opt$gtf, format="gtf")
+# 
+chr = seqlevels(gtf)
 # Remove matching
 autosome <- chr[!(tolower(chr) %in% exactMatch)]
 autosome <- autosome[!grepl(paste(fuzzyMatch, collapse="|"), tolower(autosome))]
@@ -71,48 +72,58 @@ mito <- mito[!grepl(paste(sex, collapse="|"), tolower(mito))]
 # Import the GTF file using the TxDb package
 chrom_channel = read.delim(opt$chrom_size,header=FALSE,sep="\t",stringsAsFactors=FALSE)
 colnames(chrom_channel) = c("chrom","length")
-gtf = gtf[gtf[,1] %in% chrom_channel[,1],]
-write.table(gtf, file = "./gtf.gtf", quote = FALSE, sep = "\t", row.names = FALSE, col.names = FALSE)
+chrom_channel <- chrom_channel[chrom_channel$chrom %in% c(autosome, mito),]
 
-if(length(mito) > 0){
-    txdb <- makeTxDbFromGFF("./gtf.gtf", format="auto", circ_seqs = mito,chrominfo=chrom_channel)
-}else{
-    txdb <- makeTxDbFromGFF("./gtf.gtf", format="auto",chrominfo=chrom_channel)
-}
+# keep only chromosomes present in chrom_channel
+gtf = dropSeqlevels(gtf, setdiff(seqlevels(gtf), chrom_channel$chrom), pruning.mode="coarse")
+# write.table(gtf, file = "./gtf.gtf", quote = FALSE, sep = "\t", row.names = FALSE, col.names = FALSE)
+
+# if(length(mito) > 0){
+#     # txdb <- makeTxDbFromGFF("./gtf.gtf", format="auto", circ_seqs = mito,chrominfo=chrom_channel)
+    
+# }else{
+#     # txdb <- makeTxDbFromGFF("./gtf.gtf", format="auto",chrominfo=chrom_channel)
+# }
+
+txdb <- txdbmaker::makeTxDbFromGRanges(gtf)
 
 # From the GTF get the Metadata stored in the column 9 strplit by ";"
-metaDat <- strsplit(gtf[,9], "; ")
+# metaDat <- strsplit(gtf[,9], "; ")
+
 # lapply and split each by the space " ".
 # split by the space " " and make the first element the name of the vector
 # Perform parallelization
 cpus = opt$cpus
 param <- BiocParallel::SnowParam(workers=cpus,tasks=0,stop.on.error=TRUE,progressbar = TRUE,type="SOCK")
 
-metaDatV <- BiocParallel::bplapply(metaDat, function(x) {
-    # remove trailing space and ;
-    x <- gsub(" $", "",gsub(";$", "", x))
-    # Split x by the space " "
-    x <- do.call(rbind,strsplit(x, " "))
-    n = x[,1]
-    y = x[,2]
-    names(y) = n
-    return(y)
-}, BPPARAM=param)
+# metaDatV <- BiocParallel::bplapply(metaDat, function(x) {
+#     # remove trailing space and ;
+#     x <- gsub(" $", "",gsub(";$", "", x))
+#     # Split x by the space " "
+#     x <- do.call(rbind,strsplit(x, " "))
+#     n = x[,1]
+#     y = x[,2]
+#     names(y) = n
+#     return(y)
+# }, BPPARAM=param)
 
-nn <- BiocParallel::bplapply(metaDatV,names, BPPARAM=param)
-nn = unique(unlist(nn))
-metaDatV <- BiocParallel::bplapply(metaDatV, function(x) {
-    x = x[nn]
-    return(x)
-}, BPPARAM=param)
+# nn <- BiocParallel::bplapply(metaDatV,names, BPPARAM=param)
+# nn = unique(unlist(nn))
+# metaDatV <- BiocParallel::bplapply(metaDatV, function(x) {
+#     x = x[nn]
+#     return(x)
+# }, BPPARAM=param)
 
-# Convert the list to a data frame
-metaDatVM <- do.call(rbind, metaDatV)
-colnames(metaDatVM) = nn
+# # Convert the list to a data frame
+# metaDatVM <- do.call(rbind, metaDatV)
+# colnames(metaDatVM) = nn
+
+metaDatVM <- as.data.frame(mcols(gtf))
 
 # combine the first 8 columns with the metadata - the first 8 are mandatory while the 9th are the attributes
-metaDatVM = cbind(gtf[,1:8], metaDatVM)
-colnames(metaDatVM)[1:8] = c("seqnames", "source", "feature", "start", "end", "score", "strand", "frame")
+metaDatVM = cbind(as.data.frame(gtf)[,1:8], metaDatVM)
+metaDatVM <- metaDatVM[order(metaDatVM$width,decreasing=TRUE),]
+metaDatVM <- metaDatVM[!duplicated(metaDatVM$gene_id),]
 # Convert to GRanges keep metadata
 
 ##############################################################################################################
@@ -126,31 +137,48 @@ Three_UTR_by <- GenomicFeatures::threeUTRsByTranscript(txdb, use.names=TRUE)
 
 Transcripts_by_red <- GenomicRanges::reduce(Transcripts_by)
 # Get the number of transcripts per gene
-multi_tx = lapply(Transcripts_by_red,length)
-w = which(unlist(multi_tx) > 1)
-# add the suffix to those genes with multiple non-overlapping transcripts
-Multi_tx = Transcripts_by_red[w]
-Multi_tx = unlist(Multi_tx)
 
-unique_names <- unique(names(Multi_tx))
+multi_tx = table(names((Transcripts_by_red)))
+w = which(multi_tx > 1)
 
-# Separate transcripts, exons, cds and UTRs belonging to those genes without multiple non-overlapping transcripts
-Transcripts_by_single =  Transcripts_by[which(names(Transcripts_by) %!in% unique_names)]
-Exons_by_single =  Exons_by[which(names(Exons_by) %!in% unique_names)]
-CDS_by_single =  CDS_by[which(names(CDS_by) %!in% unique_names)]
+if(length(w) > 0){
 
-# find the column in metaDatVM that contains the gene_id elements in unique_names - metaDatVM is a GRanges so we need to convert it to a data frame
-col_gene_id = apply(metaDatVM, 2, function(x) {
-    z = which(x %in% unique_names)
-    return(length(z))
-})
-col_gene_id = unlist(col_gene_id)
-w_g = which.max(col_gene_id)
-metaDatVM_single = metaDatVM[metaDatVM[,w_g] %!in% unique_names,]
-sel_gene_col = grep("gene_",colnames(metaDatVM_single))
-sel_gene_col = c(1:8,sel_gene_col)
-metaDatVM_single_gene = metaDatVM_single[,sel_gene_col]
-metaDatVM_single_gene = metaDatVM_single_gene[metaDatVM_single_gene$feature == "gene",]
+    # add the suffix to those genes with multiple non-overlapping transcripts
+    Multi_tx = Transcripts_by_red[w]
+    Multi_tx = unlist(Multi_tx)
+
+    unique_names <- unique(names(Multi_tx))
+
+    # Separate transcripts, exons, cds and UTRs belonging to those genes without multiple non-overlapping transcripts
+    Transcripts_by_single =  Transcripts_by[which(names(Transcripts_by) %!in% unique_names)]
+    Exons_by_single =  Exons_by[which(names(Exons_by) %!in% unique_names)]
+    CDS_by_single =  CDS_by[which(names(CDS_by) %!in% unique_names)]
+
+    # find the column in metaDatVM that contains the gene_id elements in unique_names - metaDatVM is a GRanges so we need to convert it to a data frame
+    col_gene_id = apply(metaDatVM, 2, function(x) {
+        z = which(x %in% unique_names)
+        return(length(z))
+    })
+    col_gene_id = unlist(col_gene_id)
+    w_g = which.max(col_gene_id)
+    metaDatVM_single = metaDatVM[metaDatVM[,w_g] %!in% unique_names,]
+    sel_gene_col = grep("gene",colnames(metaDatVM_single))
+    sel_gene_col = c(1:8,sel_gene_col)
+    metaDatVM_single_gene = metaDatVM_single[,sel_gene_col]
+    metaDatVM_single_gene = metaDatVM_single_gene[order(metaDatVM_single_gene$width,decreasing=TRUE),]
+    metaDatVM_single_gene = metaDatVM_single_gene[!duplicated(metaDatVM_single_gene[,grep("gene",colnames(metaDatVM_single_gene))]),]
+} else {
+    # If no multiple non-overlapping transcripts just reduce and save
+    Transcripts_by_single =  Transcripts_by
+    Exons_by_single =  Exons_by
+    CDS_by_single =  CDS_by
+    metaDatVM_single = metaDatVM
+    sel_gene_col = grep("gene",colnames(metaDatVM_single))
+    sel_gene_col = c(1:8,sel_gene_col)
+    metaDatVM_single_gene = metaDatVM_single[,sel_gene_col]
+    metaDatVM_single_gene = metaDatVM_single_gene[order(metaDatVM_single_gene$width,decreasing=TRUE),]
+    metaDatVM_single_gene = metaDatVM_single_gene[!duplicated(metaDatVM_single_gene[,grep("gene",colnames(metaDatVM_single_gene))]),]
+}
 
 
 # Add the gene_id to the transcripts
@@ -169,62 +197,64 @@ CDS_by_single$gene_id = names(CDS_by_single)
 CDS_by_single = split(CDS_by_single, CDS_by_single$gene_id)
 
 # Only fix the gene name:
-for (i in unique_names) {   
+if(length(w) > 0){
 
-    cat("Processing gene: ", i,"\n")
+    for (i in unique_names) {   
 
-    # select the involved tx - names will relate to the gene_id
-    dd = Multi_tx[names(Multi_tx) == i]
-    dd$gene_id = paste0(names(dd),"::",1:length(dd))
-    names(dd) = dd$gene_id
+        cat("Processing gene: ", i,"\n")
 
-    cat(" fix the metadata\n")
-    # Overlapping MetaData:
-    overlapping_meta = metaDatVM[which(metaDatVM[,w_g] == i ) ,]
-    overlapping_meta = overlapping_meta[ overlapping_meta$feature == "gene",]
-    gr_overlapping_meta = GRanges(seqnames = overlapping_meta$seqnames, ranges = IRanges(start = overlapping_meta$start, end = overlapping_meta$end), strand = overlapping_meta$strand)
-    fov = findOverlaps(gr_overlapping_meta,dd)
-    overlapping_meta = overlapping_meta[queryHits(fov),]
-    rownames(overlapping_meta) = names(dd)[subjectHits(fov)]
-    overlapping_meta$gene_id = names(dd)[subjectHits(fov)]
-    # append to the metaDatVM_single
-    overlapping_meta = overlapping_meta[,sel_gene_col]
-    metaDatVM_single_gene = rbind(metaDatVM_single_gene, overlapping_meta)
+        # select the involved tx - names will relate to the gene_id
+        dd = Multi_tx[names(Multi_tx) == i]
+        dd$gene_id = paste0(names(dd),"::",1:length(dd))
+        names(dd) = dd$gene_id
 
-    cat(" fix the transcripts\n")
-    # Overlappoing tx:
-    overlapping_tx = unlist(Transcripts_by[i])
-    fov = findOverlaps(overlapping_tx, dd)
-    names(overlapping_tx) = names(dd)[subjectHits(fov)]
-    overlapping_tx$gene_id = names(dd)[subjectHits(fov)]
-    overlapping_tx =  split(overlapping_tx, overlapping_tx$gene_id)
-    # Append to the Transcripts_by_single
-    Transcripts_by_single = c(Transcripts_by_single, overlapping_tx)
+        cat(" fix the metadata\n")
+        # Overlapping MetaData:
+        overlapping_meta = metaDatVM[which(metaDatVM[,w_g] == i ) ,]
+        overlapping_meta = overlapping_meta[ overlapping_meta$feature == "gene",]
+        gr_overlapping_meta = GRanges(seqnames = overlapping_meta$seqnames, ranges = IRanges(start = overlapping_meta$start, end = overlapping_meta$end), strand = overlapping_meta$strand)
+        fov = findOverlaps(gr_overlapping_meta,dd)
+        overlapping_meta = overlapping_meta[queryHits(fov),]
+        rownames(overlapping_meta) = names(dd)[subjectHits(fov)]
+        overlapping_meta$gene_id = names(dd)[subjectHits(fov)]
+        # append to the metaDatVM_single
+        overlapping_meta = overlapping_meta[,sel_gene_col]
+        metaDatVM_single_gene = rbind(metaDatVM_single_gene, overlapping_meta)
 
-    cat(" fix the exons\n")
-    # Assign the new gene_id to the overlapping exons, cds and UTRs
-    if(i %in% names(Exons_by)){
-        overlpping_exons = unlist(Exons_by[i])
-        fov = findOverlaps(overlpping_exons, dd)
-        names(overlpping_exons) = names(dd)[subjectHits(fov)]
-        overlpping_exons$gene_id = names(dd)[subjectHits(fov)]
-        overlpping_exons =  split(overlpping_exons,overlpping_exons$gene_id)
-        # Append to the Exons_by_single
-        Exons_by_single = c(Exons_by_single, overlpping_exons)
+        cat(" fix the transcripts\n")
+        # Overlappoing tx:
+        overlapping_tx = unlist(Transcripts_by[i])
+        fov = findOverlaps(overlapping_tx, dd)
+        names(overlapping_tx) = names(dd)[subjectHits(fov)]
+        overlapping_tx$gene_id = names(dd)[subjectHits(fov)]
+        overlapping_tx =  split(overlapping_tx, overlapping_tx$gene_id)
+        # Append to the Transcripts_by_single
+        Transcripts_by_single = c(Transcripts_by_single, overlapping_tx)
+
+        cat(" fix the exons\n")
+        # Assign the new gene_id to the overlapping exons, cds and UTRs
+        if(i %in% names(Exons_by)){
+            overlpping_exons = unlist(Exons_by[i])
+            fov = findOverlaps(overlpping_exons, dd)
+            names(overlpping_exons) = names(dd)[subjectHits(fov)]
+            overlpping_exons$gene_id = names(dd)[subjectHits(fov)]
+            overlpping_exons =  split(overlpping_exons,overlpping_exons$gene_id)
+            # Append to the Exons_by_single
+            Exons_by_single = c(Exons_by_single, overlpping_exons)
+        }
+
+        cat(" fix the cds\n")
+        # Assign the new gene_id to the overlapping exons, cds
+        if(i %in% names(CDS_by )){
+            overlapping_cds = unlist(CDS_by[i])
+            fov = findOverlaps(overlapping_cds, dd)
+            names(overlapping_cds) = names(dd)[subjectHits(fov)]
+            overlapping_cds$gene_id = names(dd)[subjectHits(fov)]
+            overlapping_cds =  split(overlapping_cds, overlapping_cds$gene_id)
+            # Append to the CDS_by_single
+            CDS_by_single = c(CDS_by_single, overlapping_cds)
+        }
     }
-
-    cat(" fix the cds\n")
-    # Assign the new gene_id to the overlapping exons, cds
-    if(i %in% names(CDS_by )){
-        overlapping_cds = unlist(CDS_by[i])
-        fov = findOverlaps(overlapping_cds, dd)
-        names(overlapping_cds) = names(dd)[subjectHits(fov)]
-        overlapping_cds$gene_id = names(dd)[subjectHits(fov)]
-        overlapping_cds =  split(overlapping_cds, overlapping_cds$gene_id)
-        # Append to the CDS_by_single
-        CDS_by_single = c(CDS_by_single, overlapping_cds)
-    }
-
 }
 
 # Now when reducing the GRanges features we will have the correct transcripts:
@@ -332,34 +362,3 @@ txdb_fix <- makeTxDb(transcripts, splicings,chrominfo_fix , genes=NULL)
 saveDb(txdb_fix, file=paste0(opt$out,"TxDB.sqlite"))
 # Write the metadata as a tab delimited file
 write.table(metaDatVM_single_gene,file=paste0(opt$out,"metadata.txt"),sep="\t",quote=FALSE,row.names=FALSE)
-
-# rtracklayer::export.gff3(txdb_fix,con=paste0(opt$out,"TxDB.gff"),version="3")
-# test <- import(paste0(opt$out,"TxDB.gff"))
-# rtracklayer::export(test,paste0(opt$out,"TxDB.gtf"),"gtf")
-
-# TxbyGene <- transcriptsBy(txdb_fix,by="gene")
-
-# # Ge the Conding and NonCoding
-# CDS_by <- GenomicFeatures::cdsBy(txdb_fix, by="gene")
-# ExonByGene <- exonsBy(txdb_fix,by="gene")
-# IntronByGene <- psetdiff(unlist(TxbyGene),CDS_by,ignore.strand=FALSE)
-# # Get the UTRs 5' and 3'
-# Five_UTR_by <- GenomicFeatures::fiveUTRsByTranscript(txdb_fix, use.names=TRUE)
-# Three_UTR_by <- GenomicFeatures::threeUTRsByTranscript(txdb_fix, use.names=TRUE)
-# # Convert to lists the UTRs. Then merge by element name and strand
-
-# UTRs <- unlist(c(Five_UTR_by,Three_UTR_by))
-# UTRs <- split(UTRs, names(UTRs))
-# UTRs <- GRangesList(UTRs)
-
-
-# # Save the TxbyGene, ExonByGene and NonCodingByGene as RData
-# save(TxbyGene,file=paste0(opt$out,"TxbyGene.RData"))
-# save(ExonByGene,file=paste0(opt$out,"ExonByGene.RData"))
-# save(IntronByGene,file=paste0(opt$out,"IntronByGene.RData"))
-
-# # Export as BED files
-# rtracklayer::export(unlist(TxbyGene),con=paste0(opt$out,"TxbyGene.bed"))
-# rtracklayer::export(unlist(ExonByGene),con=paste0(opt$out,"ExonByGene.bed"))
-# rtracklayer::export(unlist(IntronByGene),con=paste0(opt$out,"IntronByGene.bed"))
-

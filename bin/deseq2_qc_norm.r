@@ -1,142 +1,129 @@
 #!/usr/bin/env Rscript
 
-################################################
-################################################
-## REQUIREMENTS                               ##
-################################################
-################################################
+# ============================================================
+# Omics Normalization & QC Pipeline with DESeq2 + OmniNorm
+# Compatible with Linux SLURM HPC via MulticoreParam
+# Author: [Your Name]
+# ============================================================
 
-## PCA, HEATMAP AND SCATTERPLOTS FOR SAMPLES IN COUNTS FILE
-## - SAMPLE NAMES HAVE TO END IN e.g. "_R1" REPRESENTING REPLICATE ID. LAST 3 CHARACTERS OF SAMPLE NAME WILL BE TRIMMED TO OBTAIN GROUP ID FOR DESEQ2 COMPARISONS.
-## - PACKAGES BELOW NEED TO BE AVAILABLE TO LOAD WHEN RUNNING R
+# ------------------------------------------------------------
+# LOAD LIBRARIES
+# ------------------------------------------------------------
+suppressPackageStartupMessages({
+  library(optparse)
+  library(DESeq2)
+  library(dplyr)
+  library(tidyr)
+  library(OmniNorm)
+  library(ComplexHeatmap)
+  library(ggplot2)
+  library(RColorBrewer)
+  library(BiocParallel)
+})
 
-################################################
-################################################
-## LOAD LIBRARIES                             ##
-################################################
-################################################
+set.seed(12345)
 
-library(optparse)
-library(DESeq2)
-library(dplyr)
-library(tidyr)
-library(GeneralNormalizer)
-library(ComplexHeatmap)
-library(ggplot2)
-library(RColorBrewer)
-
-suppressPackageStartupMessages(library(ComplexHeatmap))
-
-################################################
-################################################
-## PARSE COMMAND-LINE PARAMETERS              ##
-################################################
-################################################
-
+# ------------------------------------------------------------
+# COMMAND-LINE OPTIONS
+# ------------------------------------------------------------
 option_list <- list(
-    make_option(c("-i", "--count_file"    ), type="character", default=NULL    , metavar="path"   , help="Count file matrix where rows are genes and columns are samples."                        ),
-    make_option(c("-f", "--count_col"     ), type="integer"  , default=3       , metavar="integer", help="First column containing sample count data."                                             ),
-    make_option(c("-d", "--id_col"        ), type="integer"  , default=1       , metavar="integer", help="Column containing identifiers to be used."                                              ),
-    make_option(c("-r", "--sample_suffix" ), type="character", default=''      , metavar="string" , help="Suffix to remove after sample name in columns e.g. '.rmDup.bam' if 'DRUG_R1.rmDup.bam'."),
-    make_option(c("-o", "--outdir"        ), type="character", default='./'    , metavar="path"   , help="Output directory."                                                                      ),
-    make_option(c("-p", "--outprefix"     ), type="character", default='deseq2', metavar="string" , help="Output prefix."                                                                         ),
-    make_option(c("-v", "--vst"           ), type="logical"  , default=FALSE   , metavar="boolean", help="Run vst transform instead of rlog."                                                     ),
-    make_option(c("-n", "--norm"          ), type="logical"  , default=FALSE   , metavar="boolean", help="Normalize with the General Normalizer Library."                                         ),
-    make_option(c("-s", "--sigma_times"   ), type="integer"  , default=1       , metavar="integer", help="Number of sigma times."                                                                 ),
-    make_option(c("-z", "--n_pop"          ), type="integer"  , default=1       , metavar="integer", help="Number of populations."                                                                 ),
-    make_option(c("-c", "--cores"         ), type="integer"  , default=1       , metavar="integer", help="Number of cores."                                                                       )
+  make_option(c("-i", "--count_file"),     type="character", help="Path to count matrix file."),
+  make_option(c("-d", "--id_col"),         type="integer",   default=1, help="Column with gene/feature IDs."),
+  make_option(c("-f", "--count_col"),      type="integer",   default=3, help="Index of first sample column."),
+  make_option(c("-r", "--sample_suffix"),  type="character", default="", help="Suffix to strip from sample names."),
+  make_option(c("-o", "--outdir"),         type="character", default="./", help="Output directory."),
+  make_option(c("-p", "--outprefix"),      type="character", default="deseq2", help="Output filename prefix."),
+  make_option(c("-v", "--vst"),            type="logical",   default=FALSE, help="Use vst (TRUE) or rlog (FALSE)."),
+  make_option(c("-n", "--norm"),           type="logical",   default=FALSE, help="Use OmniNorm normalization."),
+  make_option(c("-s", "--sigma_times"),    type="integer",   default=1, help="Sigma multiplier for invariant filtering."),
+  make_option(c("-z", "--n_pop"),          type="integer",   default=1, help="Number of populations to fit."),
+  make_option(c("-c", "--cores"),          type="integer",   default=1, help="Number of parallel cores.")
 )
 
-opt_parser <- OptionParser(option_list=option_list)
-opt        <- parse_args(opt_parser)
+opt <- parse_args(OptionParser(option_list=option_list))
 
-if (is.null(opt$count_file)){
-    print_help(opt_parser)
-    stop("Please provide a counts file.", call.=FALSE)
+
+if (is.null(opt$count_file)) {
+  stop("Error: --count_file is required.", call.=FALSE)
 }
 
-################################################
-################################################
-## READ IN COUNTS FILE                        ##
-################################################
-################################################
+# ------------------------------------------------------------
+# INPUT & SAMPLE PROCESSING
+# ------------------------------------------------------------
+count_table <- read.delim(opt$count_file, header=TRUE, row.names=NULL)
+rownames(count_table) <- count_table[[opt$id_col]]
+count_table <- count_table[, opt$count_col:ncol(count_table), drop=FALSE]
 
-count.table           <- read.delim(file=opt$count_file,header=TRUE, row.names=NULL)
-rownames(count.table) <- count.table[,opt$id_col]
-count.table           <- count.table[,opt$count_col:ncol(count.table),drop=FALSE]
-colnames(count.table) <- gsub(opt$sample_suffix,"",colnames(count.table))
-colnames(count.table) <- gsub(pattern='\\.$', replacement='', colnames(count.table))
+# Clean up sample names
+colnames(count_table) <- gsub(opt$sample_suffix, "", colnames(count_table))
+colnames(count_table) <- gsub("\\.$", "", colnames(count_table))
 
+sample_names <- colnames(count_table)
 
-################################################
-################################################
-## RUN General NORM                           ##
-################################################
-################################################
-
-cpus=opt$cores
-if(!is.null(cpus)){
-    param <- BiocParallel::SnowParam(workers=cpus,tasks=0,stop.on.error=TRUE,progressbar = TRUE,type="SOCK")
-}else{
-    param <- NULL
+if (any(duplicated(colnames(count_table)))) {
+    stop("Sample names (column names) must be unique after stripping suffix.")
 }
 
-if(opt$norm == TRUE){
+# ------------------------------------------------------------
+# MULTICORE CONFIGURATION (SLURM-compatible)
+# ------------------------------------------------------------
+cpus  <- opt$cores
+bpp   <- if (cpus > 1) MulticoreParam(cpus,progressbar=TRUE) else SerialParam()
 
-    save_folder_norm = paste0(opt$outdir,"/normalization/")
-    dir.create(save_folder_norm, recursive=TRUE)
+# ------------------------------------------------------------
+# RUN NORMALIZATION (OmniNorm)
+# ------------------------------------------------------------
+if (opt$norm) {
+    norm_outdir <- file.path(opt$outdir, "normalization")
+    dir.create(norm_outdir, recursive=TRUE, showWarnings=FALSE)
 
-    # Assemble the DEG_DESIGN using name Layers by "_"
-    # Names w/o _R[0-9]
-    cn =  colnames(count.table)
-    # Now the conditions we need to strtify - 
-    name_components <- strsplit(cn, "_")
-    n_components    <- length(unlist(name_components))
-    decompose       <- n_components!=1 && all(sapply(name_components, length)==n_components)
-    coldata         <- data.frame(cn, Sample_ID=cn, row.names=1)
-    if (decompose) {
-        groupings        <- as.data.frame(lapply(1:n_components, function(i) sapply(name_components, "[[", i)))
-        names(groupings) <- paste0("Group", 1:n_components)
-        n_distinct       <- sapply(groupings, function(grp) length(unique(grp)))
-        groupings        <- groupings[n_distinct!=1 & n_distinct!=length(cn)]
-        if (ncol(groupings)!=0) {
-            coldata <- cbind(coldata, groupings)
-        } else {
-            decompose <- FALSE
-        }
-    }else{
-        coldata$Group1 = gsub("_R[0-9].*","",cn)
+    # Construct design with required columns
+    Sample_IDs <- colnames(count_table)
+
+    Sample_Condition <- gsub("_R[0-9]+.*", "", Sample_IDs)
+    Sample_Replicate <- gsub(".*_R", "R", Sample_IDs)
+
+    design_df <- data.frame(
+    Sample_ID        = Sample_IDs,
+    Sample_Condition = Sample_Condition,
+    Sample_Replicate = Sample_Replicate,
+    stringsAsFactors = FALSE
+    )
+    rownames(design_df) <- design_df$Sample_ID
+
+    if (any(!grepl("^R[0-9]+$", design_df$Sample_Replicate))) {
+        warning("Some Sample_Replicate entries do not match expected R[0-9]+ pattern.")
     }
 
-    # Take only the R[0-9] part so remove text before any _R[0-9]
-    coldata$Sample_Replicate = paste0("R",gsub(".*_R","",colnames(count.table)))
+    # Normalize only well-behaved rows (depth-normalized and trimmed)
+    x <- count_table
+    x_depth <- x / colSums(x) * 1e6
+    x <- x[order(rowMeans(x_depth), decreasing=TRUE), ]
+    x <- x[round(nrow(x)*0.001):round(nrow(x)*0.999), ]
 
-    design = coldata
-
-    x = count.table
-    x_depth_p = x/colSums(x)*1000000
-    # remove raws top 0.1% and bottom 0.1% based on rowMeans
-    x = x[order(rowMeans(x_depth_p), decreasing = T),]
-    x = x[round(nrow(x)*0.001):round(nrow(x)*0.999),]
-
-    # Compute the normalization
-    sigma_times = opt$sigma_times
-    n_pop =    opt$n_pop
-    Result = RunNorm(   x,
-                        design,
-                        sigma_times = sigma_times,
-                        fix_reference="random",
-                        row_name_index=rownames(x),
-                        saving_path=save_folder_norm,
-                        n_pop=n_pop,
-                        n_pop_reference=n_pop,
-                        BiocParam=param
-                        )
+    # Call RunNorm with updated API
+    Result <- RunNorm(
+        mat_path = x,
+        design_path = design_df[colnames(x), , drop=FALSE],
+        fix_reference = "random",
+        row_name_index = NULL,
+        n_pop = opt$n_pop,
+        n_pop_reference = opt$n_pop,
+        saving_path = norm_outdir,
+        sigma_times = opt$sigma_times,
+        dist_family = "Skew.normal",
+        Norm_plot = TRUE,
+        Save_results = TRUE,
+        return_full = FALSE,
+        BiocParam = bpp,
+        cpus = cpus
+    )
+    sc <- Result$scaling_factors
+    sc[is.na(sc$scaling) | sc$scaling <= 0, "scaling"] <- 1
+    sc[is.na(sc$mean_g) | sc$mean_g <= 0, "mean_g"] <- 1
     
-    colData = Result$scaling_factors
-    mat = Result$norm_mat
-
 }
+
 
 ################################################
 ################################################
@@ -149,7 +136,7 @@ if (file.exists(opt$outdir) == FALSE) {
 }
 setwd(opt$outdir)
 
-samples.vec     <- colnames(count.table)
+samples.vec     <- colnames(count_table)
 name_components <- strsplit(samples.vec, "_")
 n_components    <- length(name_components[[1]])
 decompose       <- n_components!=1 && all(sapply(name_components, length)==n_components)
@@ -168,16 +155,18 @@ if (decompose) {
 
 DDSFile <- paste(opt$outprefix,".dds.RData",sep="")
 
-counts  <- count.table[,samples.vec,drop=FALSE]
-dds     <- DESeqDataSetFromMatrix(countData=round(counts), colData=coldata, design=~ 1)
-dds     <- estimateSizeFactors(dds)
-
 if(opt$norm == TRUE){
-    norm = Result$scaling_factors
-    sizeFactors(dds) = norm[names(sizeFactors(dds)),"scaling"]
+    # ingest pre-norm table:
+    counts  <- count_table
+    dds     <- DESeqDataSetFromMatrix(countData=counts, colData=coldata, design=~ 1)
+    sizeFactors(dds) = 1/sc[colnames(counts), "mean_g"]
+} else {
+    counts  <- count_table[,samples.vec,drop=FALSE]
+    dds     <- DESeqDataSetFromMatrix(countData=round(counts), colData=coldata, design=~ 1)
+    dds     <- estimateSizeFactors(dds)
 }
 
-if (min(dim(count.table))<=1)  { # No point if only one sample, or one gene
+if (min(dim(counts))<=1)  { # No point if only one sample, or one gene
     save(dds,file=DDSFile)
     saveRDS(dds, file=sub("\\.dds\\.RData$", ".rds", DDSFile))
     warning("Not enough samples or genes in counts file for PCA.", call.=FALSE)
@@ -194,6 +183,7 @@ if (!opt$vst) {
 assay(dds, vst_name) <- assay(rld)
 save(dds,file=DDSFile)
 saveRDS(dds, file=sub("\\.dds\\.RData$", ".rds", DDSFile))
+
 
 ################################################
 ################################################
@@ -247,7 +237,8 @@ for (n_top_var in ntop) {
             panel.grid.major = element_blank(),
             panel.grid.minor = element_blank(),
             panel.background = element_blank(),
-            panel.border = element_rect(colour = "black", fill=NA, size=1))
+            panel.border = element_rect(colour = "black", fill = NA, linewidth = 1)
+        )
     print(pl)
 
     if (decompose) {
@@ -279,71 +270,21 @@ write.table(pca.vals, file = paste(opt$outprefix, ".pca.vals.txt", sep=""),
 sampleDists      <- dist(t(assay(dds, vst_name)))
 sampleDistMatrix <- as.matrix(sampleDists)
 colors           <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
-pheatmap(
-    sampleDistMatrix,
-    clustering_distance_rows=sampleDists,
-    clustering_distance_cols=sampleDists,
-    col=colors,
-    main=paste("Euclidean distance between", vst_name, "of samples")
+
+hc <- hclust(sampleDists, method = "complete")
+ht <- Heatmap(
+  sampleDistMatrix,
+  name = "Distance",
+  col = colors,
+  cluster_rows = as.dendrogram(hc),
+  cluster_columns = as.dendrogram(hc),
+  show_row_dend = TRUE,
+  show_column_dend = TRUE,
+  column_title = paste("Euclidean distance between", vst_name, "of samples"),
+  row_names_side = "left"
 )
+draw(ht)
 
-## WRITE SAMPLE DISTANCES TO FILE
-write.table(cbind(sample = rownames(sampleDistMatrix), sampleDistMatrix),file=paste(opt$outprefix, ".sample.dists.txt", sep=""),
-            row.names=FALSE, col.names=TRUE, sep="\t", quote=FALSE)
-dev.off()
-
-################################################
-################################################
-## SAVE SIZE FACTORS                          ##
-################################################
-################################################
-
-SizeFactorsDir <- "size_factors/"
-if (file.exists(SizeFactorsDir) == FALSE) {
-    dir.create(SizeFactorsDir, recursive=TRUE)
-}
-
-NormFactorsFile <- paste(SizeFactorsDir,opt$outprefix, ".size_factors.RData", sep="")
-
-normFactors <- sizeFactors(dds)
-save(normFactors, file=NormFactorsFile)
-
-for (name in names(sizeFactors(dds))) {
-    sizeFactorFile <- paste(SizeFactorsDir,name, ".txt", sep="")
-    write(as.numeric(sizeFactors(dds)[name]), file=sizeFactorFile)
-}
-
-
-# colData must have "Sample_ID" and "scaling" columns
-# sizeFactors(dds) are with the custom normalization or the DESEQ2 normalization
-# So we assemble the colData with the sizeFactors(dds) and write it to file
-colData <- data.frame(Sample_ID=colnames(assay(dds, vst_name)), scaling=as.numeric(sizeFactors(dds)))
-rownames(colData) <- colData$Sample_ID
-write.table(colData,file=paste(opt$outdir, "/scaling_dat.txt", sep=""),
-        row.names=FALSE, col.names=TRUE, sep="\t", quote=FALSE)
-
-norm_mat <- count.table[, colData$Sample_ID]
-norm_mat <- sweep(norm_mat[, colData$Sample_ID], 2, colData[, "scaling"], "*")
-
-write.table(norm_mat,file=paste(opt$outdir, "/Final_norm_count_mat.txt", sep=""),
-        row.names=FALSE, col.names=TRUE, sep="\t", quote=FALSE)
-
-
-
-################################################
-################################################
-## R SESSION INFO                             ##
-################################################
-################################################
-
-RLogFile <- "R_sessionInfo.log"
-
-sink(RLogFile)
-a <- sessionInfo()
-print(a)
-sink()
-
-################################################
-################################################
-################################################
-################################################
+# Close the PDF device opened above
+if (grDevices::dev.cur() > 1) grDevices::dev.off()
+# End of script

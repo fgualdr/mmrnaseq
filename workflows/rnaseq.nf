@@ -273,7 +273,7 @@ workflow RNASEQ {
         ch_fastq.multiple
     )
     .reads
-    .mix(ch_fastq.single)
+    .mix( ch_fastq.single )
     .set { ch_cat_fastq }
     ch_versions = ch_versions.mix(CAT_FASTQ.out.versions.first().ifEmpty(null))
 
@@ -535,14 +535,14 @@ workflow RNASEQ {
             )
             ch_versions = ch_versions.mix(QUANTIFY_STAR_SALMON.out.versions)
             // Run DESeq2 QC on Salmon counts
-            DESEQ2_QC_STAR_SALMON (
-                QUANTIFY_STAR_SALMON.out.counts_gene,
-                ch_pca_header_multiqc,
-                ch_clustering_header_multiqc
-            )
-            ch_aligner_pca_multiqc        = DESEQ2_QC_STAR_SALMON.out.pca_multiqc
-            ch_aligner_clustering_multiqc = DESEQ2_QC_STAR_SALMON.out.dists_multiqc
-            ch_versions = ch_versions.mix(DESEQ2_QC_STAR_SALMON.out.versions)
+            // DESEQ2_QC_STAR_SALMON (
+            //     QUANTIFY_STAR_SALMON.out.counts_gene,
+            //     ch_pca_header_multiqc,
+            //     ch_clustering_header_multiqc
+            // )
+            // ch_aligner_pca_multiqc        = DESEQ2_QC_STAR_SALMON.out.pca_multiqc
+            // ch_aligner_clustering_multiqc = DESEQ2_QC_STAR_SALMON.out.dists_multiqc
+            // ch_versions = ch_versions.mix(DESEQ2_QC_STAR_SALMON.out.versions)
         }
     }
 
@@ -703,9 +703,13 @@ workflow RNASEQ {
             ch_pca_header_multiqc,
             ch_clustering_header_multiqc
         )
+
+        ch_aligner_pca_multiqc        = NORMALIZE_COUNTS_INTRON_EXON.out.pca_multiqc
+        ch_aligner_clustering_multiqc = NORMALIZE_COUNTS_INTRON_EXON.out.dists_multiqc
+
         NORMALIZE_COUNTS_INTRON_EXON
             .out
-            .noamlization_txt
+            .normalization_txt
             .splitCsv ( header:true, sep:'\t' )
             .map { row -> 
                 def id = row.Sample_ID
@@ -723,6 +727,7 @@ workflow RNASEQ {
             }
             .set { ch_bam_bai_scale }
         ch_bam_bai_scale.view()
+
         DEEPTOOLS_BIGWIG_NORM(
             ch_bam_bai_scale
         )

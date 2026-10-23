@@ -1,9 +1,6 @@
 process NORMALIZE_COUNTS_INTRON_EXON {
-    label "process_medium"
-
-    // (Bio)conda packages have intentionally not been pinned to a specific version
-    // This was to avoid the pipeline failing due to package conflicts whilst creating the environment when using -profile conda
-    container 'docker://fgualdr/envnorm_fix'
+    label "process_high"
+    container 'docker://fgualdr/omninorm'
 
     input:
     path rds
@@ -11,20 +8,21 @@ process NORMALIZE_COUNTS_INTRON_EXON {
     path clustering_header_multiqc
 
     output:
-    path "normalization"        , optional:true, emit: noamlization
-    path "scaling_dat.txt"      , optional:true, emit: noamlization_txt
-    path "ALL_READS_norm.txt"                 , optional:true, emit:final_all_scaled_mat
-    path "INTRON_READS_norm.txt"                 , optional:true, emit:final_intron_scaled_mat
-    path "EXON_READS_norm.txt"                 , optional:true, emit:final_exon_scaled_mat
-    path "*.pdf"                , optional:true, emit: pdf
-    path "*.RData"              , optional:true, emit: rdata
-    path "*pca.vals.txt"        , optional:true, emit: pca_txt
-    path "*pca.vals_mqc.tsv"    , optional:true, emit: pca_multiqc
-    path "*sample.dists.txt"    , optional:true, emit: dists_txt
-    path "*sample.dists_mqc.tsv", optional:true, emit: dists_multiqc
-    path "*.log"                , optional:true, emit: log
-    path "size_factors"         , optional:true, emit: size_factors
-    path "versions.yml"         , emit: versions
+    path "normalization", optional: true, emit: normalization
+    path "scaling_dat.txt", optional: true, emit: normalization_txt
+    path "ALL_READS_norm.txt", optional: true, emit: final_all_scaled_mat
+    path "INTRON_READS_norm.txt", optional: true, emit: final_intron_scaled_mat
+    path "EXON_READS_norm.txt", optional: true, emit: final_exon_scaled_mat
+    path "*.rds", optional: true, emit: rds
+    path "*.pdf", optional: true, emit: pdf
+    path "*.RData", optional: true, emit: rdata
+    path "*pca.vals.txt", optional: true, emit: pca_txt
+    path "*pca.vals_mqc.tsv", optional: true, emit: pca_multiqc
+    path "*sample.dists.txt", optional: true, emit: dists_txt
+    path "*sample.dists_mqc.tsv", optional: true, emit: dists_multiqc
+    path "*.log", optional: true, emit: log
+    path "size_factors", optional: true, emit: size_factors
+    path "versions.yml", emit: versions
 
     when:
     task.ext.when == null || task.ext.when
@@ -36,8 +34,8 @@ process NORMALIZE_COUNTS_INTRON_EXON {
     def label_upper = args2.toUpperCase()
 
     def norm = params.normalize ? 'TRUE' : 'FALSE'
-    def sigma_times = params.sigma_times ? params.sigma_times : '1'
-    def n_pop = params.n_pop ? params.n_pop : '1'
+    def sigma_times = params.sigma_times ?: '1'
+    def n_pop = params.n_pop ?: '1'
 
     """
     intron_exon_count_norm.r \\

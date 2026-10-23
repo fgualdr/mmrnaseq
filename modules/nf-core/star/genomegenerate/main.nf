@@ -1,6 +1,5 @@
 process STAR_GENOMEGENERATE {
     tag "$fasta"
-    label 'process_high'
 
     conda "bioconda::star=2.7.10a bioconda::samtools=1.16.1 conda-forge::gawk=5.1.0"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
@@ -21,9 +20,14 @@ process STAR_GENOMEGENERATE {
     script:
     def args = task.ext.args ?: ''
     def args_list = args.tokenize()
-    def memory = task.memory ? "--limitGenomeGenerateRAM ${task.memory.toBytes() - 100000000}" : ''
+    def memory = task.memory ? "--limitGenomeGenerateRAM ${task.memory.toBytes()}" : ''
     if (args_list.contains('--genomeSAindexNbases')) {
         """
+        # print task.memory for debugging
+        echo "Using memory limit: $task.memory"
+        # echo the  memory limit in bytes
+        echo "Memory limit in bytes: $memory"
+        
         mkdir star
         STAR \\
             --runMode genomeGenerate \\

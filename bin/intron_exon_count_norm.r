@@ -17,16 +17,21 @@
 ################################################
 ################################################
 
-library(optparse)
-library(DESeq2)
-library(dplyr)
-library(tidyr)
-library(GeneralNormalizer)
-library(ComplexHeatmap)
-library(ggplot2)
-library(RColorBrewer)
+suppressPackageStartupMessages({
+  library(optparse)
+  library(DESeq2)
+  library(dplyr)
+  library(tidyr)
+  library(OmniNorm)
+  library(ComplexHeatmap)
+  library(ggplot2)
+  library(RColorBrewer)
+  library(BiocParallel)
+  library(matrixStats)  # <-- add this
+})
 
-suppressPackageStartupMessages(library(ComplexHeatmap))
+set.seed(12345)
+
 
 ################################################
 ################################################
@@ -47,57 +52,40 @@ option_list <- list(
 opt_parser <- OptionParser(option_list=option_list)
 opt        <- parse_args(opt_parser)
 
-################################################
-rdat_files <- list.files(pattern="*.rds")
 
+################################################
+rdat_files <- list.files(pattern="\\.rds$")  # proper regex
 if (length(rdat_files) == 0) {
     print_help(opt_parser)
     stop("No RDS files.", call.=FALSE)
 }
+# read
+count.table <- lapply(rdat_files, readRDS)
+names(count.table) <- gsub("\\.rds$", "", rdat_files)  # escape dot, anchor
 
-################################################
-################################################
-## READ IN COUNTS FILE                        ##
-################################################
-################################################
+# extract the three tables per sample
+dat_all <- lapply(count.table, `[[`, "dat_all")
+dat_int <- lapply(count.table, `[[`, "dat_int")
+dat_ex  <- lapply(count.table, `[[`, "dat_ex")
 
-# Import the rds files load the R objects:
-count.table <- list()
-for (i in 1:length(rdat_files)) {
-    count.table[[i]] <- readRDS(rdat_files[i])
+# merge by gene_id (outer join), then set rownames and drop gene_id col
+merge_by_gene <- function(lst){
+  out <- Reduce(function(x,y) merge(x,y, by="gene_id", all=TRUE), lst)
+  rownames(out) <- out$gene_id
+  out <- out[, setdiff(colnames(out), "gene_id"), drop=FALSE]
+  # replace NA with 0 (DESeq2 cannot take NA)
+  out[is.na(out)] <- 0
+  # enforce numeric
+  out[] <- lapply(out, function(z) { z <- as.numeric(z); ifelse(is.na(z), 0, z) })
+  as.data.frame(out, check.names=FALSE)
 }
-names(count.table) = gsub(".rds","",rdat_files)
 
-# The imported list is composed of a list of 3 data.frames i.e. "dat_all" "dat_int" "dat_ex"
-# We generate the dat_all, dat_int, dat_ex tables by merging the corresponding tables from the list
-# We extract the tables named "dat_all" "dat_int" "dat_ex" from the list - there are as many tables as samples
-dat_all = list()
-dat_int = list()
-dat_ex  = list()
-for (i in 1:length(count.table)) {
-    dat_all[[i]] = count.table[[i]]$dat_all
-    dat_int[[i]] = count.table[[i]]$dat_int
-    dat_ex[[i]]  = count.table[[i]]$dat_ex
-}
-# We reduce the list to a single data.frame by merging the tables
-dat_all = Reduce(function(x, y) merge(x, y, by = "gene_id", all = TRUE), dat_all)
-dat_int = Reduce(function(x, y) merge(x, y, by = "gene_id", all = TRUE), dat_int)
-dat_ex  = Reduce(function(x, y) merge(x, y, by = "gene_id", all = TRUE), dat_ex)
-# We set the rownames to the gene_id
-rownames(dat_all) = dat_all$gene_id
-rownames(dat_int) = dat_int$gene_id
-rownames(dat_ex)  = dat_ex$gene_id
-# Remove the gene_id column
-dat_all = dat_all[,!colnames(dat_all) %in% c("gene_id")]
-dat_int = dat_int[,!colnames(dat_int) %in% c("gene_id")]
-dat_ex  = dat_ex[,!colnames(dat_ex) %in% c("gene_id")]
+dat_all <- merge_by_gene(dat_all)
+dat_int <- merge_by_gene(dat_int)
+dat_ex  <- merge_by_gene(dat_ex)
 
-# Ok now the dat_all will be used to compute the normalization factors so we start with that
-
-
-count.table           <- dat_all
-colnames(count.table) <- gsub(pattern='\\.$', replacement='', colnames(count.table))
-
+count.table <- dat_all
+colnames(count.table) <- gsub("\\.$", "", colnames(count.table))
 
 ################################################
 ################################################
@@ -107,66 +95,79 @@ colnames(count.table) <- gsub(pattern='\\.$', replacement='', colnames(count.tab
 
 cpus=opt$cores
 if(!is.null(cpus)){
-    param <- BiocParallel::SnowParam(workers=cpus,tasks=0,stop.on.error=TRUE,progressbar = TRUE,type="SOCK")
+    param <- BiocParallel::MulticoreParam(workers=cpus, progressbar = TRUE)
 }else{
-    param <- NULL
+    param <- BiocParallel::SerialParam(progressbar = TRUE)
 }
 
+raw_counts <- as.matrix(count.table)
 if(opt$norm == TRUE){
 
-    save_folder_norm = paste0(opt$outdir,"/normalization/")
-    dir.create(save_folder_norm, recursive=TRUE)
+    save_folder_norm <- file.path(opt$outdir, "normalization")
+    unlink(save_folder_norm, recursive=TRUE, force=TRUE)
+    dir.create(save_folder_norm, recursive=TRUE, showWarnings=FALSE)
 
-    # Assemble the DEG_DESIGN using name Layers by "_"
-    # Names w/o _R[0-9]
-    cn =  colnames(count.table)
-    # Now the conditions we need to strtify - 
-    name_components <- strsplit(cn, "_")
-    n_components    <- length(unlist(name_components))
-    decompose       <- n_components!=1 && all(sapply(name_components, length)==n_components)
-    coldata         <- data.frame(cn, Sample_ID=cn, row.names=1)
-    if (decompose) {
-        groupings        <- as.data.frame(lapply(1:n_components, function(i) sapply(name_components, "[[", i)))
-        names(groupings) <- paste0("Group", 1:n_components)
-        n_distinct       <- sapply(groupings, function(grp) length(unique(grp)))
-        groupings        <- groupings[n_distinct!=1 & n_distinct!=length(cn)]
-        if (ncol(groupings)!=0) {
-            coldata <- cbind(coldata, groupings)
-        } else {
-            decompose <- FALSE
-        }
-    }else{
-        coldata$Group1 = gsub("_R[0-9].*","",cn)
-    }
+    Sample_IDs      <- colnames(raw_counts)
+    Sample_Condition <- gsub("_R[0-9]+.*", "", Sample_IDs)
+    Sample_Replicate <- gsub(".*_R", "R", Sample_IDs)
 
-    # Take only the R[0-9] part so remove text before any _R[0-9]
-    coldata$Sample_Replicate = paste0("R",gsub(".*_R","",colnames(count.table)))
+    if (anyDuplicated(Sample_IDs)) stop("Sample IDs are not unique after suffix parsing.")
 
-    design = coldata
+    design_df <- data.frame(
+      Sample_ID        = Sample_IDs,
+      Sample_Condition = Sample_Condition,
+      Sample_Replicate = Sample_Replicate,
+      stringsAsFactors = FALSE,
+      row.names        = Sample_IDs
+    )
 
-    x = count.table
-    x_depth_p = x/colSums(x)*1000000
-    # remove raws top 0.1% and bottom 0.1% based on rowMeans
-    x = x[order(rowMeans(x_depth_p), decreasing = T),]
-    x = x[round(nrow(x)*0.001):round(nrow(x)*0.999),]
+    x <- raw_counts
 
-    # Compute the normalization
-    sigma_times = opt$sigma_times
-    n_pop =    opt$n_pop
-    Result = RunNorm(   x,
-                        design,
-                        sigma_times = sigma_times,
-                        fix_reference="random",
-                        row_name_index=rownames(x),
-                        saving_path=save_folder_norm,
-                        n_pop=n_pop,
-                        n_pop_reference=n_pop,
-                        BiocParam=param
-                        )
-    
-    colData = Result$scaling_factors
-    mat = Result$norm_mat
+    # guard zero-sum columns in depth scaling
+    cs <- colSums(x)
+    cs_safe <- pmax(cs, 1)
+    x_depth_p <- sweep(x, 2, cs_safe, "/") * 1e6
 
+    # robust 0.1% trimming
+    n <- nrow(x_depth_p)
+    start <- max(1, floor(n*0.001) + 1)
+    end   <- max(start, ceiling(n*0.999))
+    x <- x[order(rowMeans(x_depth_p), decreasing=TRUE), , drop=FALSE]
+    x <- x[start:end, , drop=FALSE]
+
+    Result <- RunNorm(
+      mat_path         = x,
+      design_path      = design_df,
+      fix_reference    = "random",
+      row_name_index   = NULL,
+      n_pop            = opt$n_pop,
+      n_pop_reference  = opt$n_pop,
+      saving_path      = save_folder_norm,
+      sigma_times      = opt$sigma_times,
+      dist_family      = "Skew.normal",
+      Norm_plot        = TRUE,
+      Save_results     = TRUE,
+      return_full      = FALSE,
+      BiocParam        = param,
+      cpus             = cpus
+    )
+
+    omni_scaling <- Result$scaling_factors
+    omni_norm_mat <- Result$norm_mat  # matrix
+
+    # also write a tidy OmniNorm-normalized matrix with gene IDs
+    # Coerce to base matrix → data.frame so cbind.Matrix is not used
+    omni_norm_df <- data.frame(
+      gene_id = rownames(omni_norm_mat),
+      as.matrix(omni_norm_mat),
+      check.names = FALSE
+    )
+
+    write.table(
+      omni_norm_df,
+      file = file.path(save_folder_norm, "OmniNorm_normalized_counts.txt"),
+      sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE
+    )
 }
 
 ################################################
@@ -174,56 +175,53 @@ if(opt$norm == TRUE){
 ## RUN DESEQ2                                 ##
 ################################################
 ################################################
-
-if (file.exists(opt$outdir) == FALSE) {
-    dir.create(opt$outdir, recursive=TRUE)
-}
+if (!dir.exists(opt$outdir)) dir.create(opt$outdir, recursive=TRUE)
 setwd(opt$outdir)
 
-samples.vec     <- colnames(count.table)
+samples.vec     <- colnames(raw_counts)
 name_components <- strsplit(samples.vec, "_")
 n_components    <- length(name_components[[1]])
-decompose       <- n_components!=1 && all(sapply(name_components, length)==n_components)
+decompose       <- n_components != 1 && all(sapply(name_components, length) == n_components)
 coldata         <- data.frame(samples.vec, sample=samples.vec, row.names=1)
+
 if (decompose) {
-    groupings        <- as.data.frame(lapply(1:n_components, function(i) sapply(name_components, "[[", i)))
-    n_distinct       <- sapply(groupings, function(grp) length(unique(grp)))
-    groupings        <- groupings[n_distinct!=1 & n_distinct!=length(samples.vec)]
-    if (ncol(groupings)!=0) {
-        names(groupings) <- paste0("Group", 1:ncol(groupings))
-        coldata <- cbind(coldata, groupings)
-    } else {
-        decompose <- FALSE
-    }
+  groupings  <- as.data.frame(lapply(1:n_components, function(i) sapply(name_components, "[[", i)))
+  n_distinct <- sapply(groupings, function(grp) length(unique(grp)))
+  groupings  <- groupings[n_distinct != 1 & n_distinct != length(samples.vec)]
+  if (ncol(groupings) != 0) {
+    names(groupings) <- paste0("Group", 1:ncol(groupings))
+    coldata <- cbind(coldata, groupings)
+  } else {
+    decompose <- FALSE
+  }
 }
 
-DDSFile <- paste(opt$outprefix,".dds.RData",sep="")
+DDSFile <- paste0(opt$outprefix, ".dds.RData")
 
-counts  <- count.table[,samples.vec,drop=FALSE]
-dds     <- DESeqDataSetFromMatrix(countData=round(counts), colData=coldata, design=~ 1)
-dds     <- estimateSizeFactors(dds)
+dds <- DESeqDataSetFromMatrix(countData = round(raw_counts[, samples.vec, drop=FALSE]),
+                              colData   = coldata,
+                              design    = ~ 1)
 
-if(opt$norm == TRUE){
-    norm = Result$scaling_factors
-    sizeFactors(dds) = norm[names(sizeFactors(dds)),"scaling"]
+dds <- estimateSizeFactors(dds)
+
+if (isTRUE(opt$norm)) {
+  # Use OmniNorm's scaling: DESeq2 offsets should be inverse of scaling
+  stopifnot(exists("omni_scaling"))
+  sf <- 1 / omni_scaling[ names(sizeFactors(dds)), "scaling" ]
+  sizeFactors(dds) <- sf
 }
 
-if (min(dim(count.table))<=1)  { # No point if only one sample, or one gene
-    save(dds,file=DDSFile)
-    saveRDS(dds, file=sub("\\.dds\\.RData$", ".rds", DDSFile))
-    warning("Not enough samples or genes in counts file for PCA.", call.=FALSE)
-    quit(save = "no", status = 0, runLast = FALSE)
-}
-if (!opt$vst) {
-    vst_name <- "rlog"
-    rld      <- rlog(dds)
-} else {
-    vst_name <- "vst"
-    rld      <- varianceStabilizingTransformation(dds)
+if (min(dim(raw_counts)) <= 1) {
+  save(dds, file=DDSFile); saveRDS(dds, file=sub("\\.dds\\.RData$", ".rds", DDSFile))
+  warning("Not enough samples or genes in counts file for PCA.", call.=FALSE)
+  quit(save="no", status=0, runLast=FALSE)
 }
 
+vst_name <- if (!isTRUE(opt$vst)) "rlog" else "vst"
+rld <- if (vst_name == "rlog") rlog(dds) else varianceStabilizingTransformation(dds)
 assay(dds, vst_name) <- assay(rld)
-save(dds,file=DDSFile)
+
+save(dds, file=DDSFile)
 saveRDS(dds, file=sub("\\.dds\\.RData$", ".rds", DDSFile))
 
 ################################################
@@ -259,9 +257,9 @@ plotPCA_vst <- function (object,  ntop = 500, assay=length(assays(object))) {
     return(df)
 }
 
-PlotFile <- paste(opt$outprefix,".plots.pdf",sep="")
-
+PlotFile <- paste0(opt$outprefix, ".plots.pdf")
 pdf(file=PlotFile, onefile=TRUE, width=7, height=7)
+on.exit({ if (grDevices::dev.cur() > 1) grDevices::dev.off() }, add=TRUE)
 ## PCA
 ntop <- c(500, Inf)
 for (n_top_var in ntop) {
@@ -278,7 +276,7 @@ for (n_top_var in ntop) {
             panel.grid.major = element_blank(),
             panel.grid.minor = element_blank(),
             panel.background = element_blank(),
-            panel.border = element_rect(colour = "black", fill=NA, size=1))
+            panel.border = element_rect(colour = "black", fill = NA, linewidth = 1))
     print(pl)
 
     if (decompose) {
@@ -307,22 +305,33 @@ write.table(pca.vals, file = paste(opt$outprefix, ".pca.vals.txt", sep=""),
             row.names = FALSE, col.names = TRUE, sep = "\t", quote = TRUE)
 
 ## SAMPLE CORRELATION HEATMAP
+library(ComplexHeatmap)
+
 sampleDists      <- dist(t(assay(dds, vst_name)))
 sampleDistMatrix <- as.matrix(sampleDists)
-colors           <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
-pheatmap(
+colors           <- colorRampPalette(rev(brewer.pal(9, "Blues")))(255)
+
+ht <- Heatmap(
     sampleDistMatrix,
-    clustering_distance_rows=sampleDists,
-    clustering_distance_cols=sampleDists,
-    col=colors,
-    main=paste("Euclidean distance between", vst_name, "of samples")
+    name = "Distance",
+    col = colors,
+    cluster_rows = TRUE,
+    cluster_columns = TRUE,
+    column_title = paste("Euclidean distance between", vst_name, "of samples"),
+    show_row_names = TRUE,
+    show_column_names = TRUE
 )
+
+draw(ht)
+
+# Close the PDF device opened above
+if (grDevices::dev.cur() > 1) grDevices::dev.off()
 
 ## WRITE SAMPLE DISTANCES TO FILE
 cn_add = c("sample", colnames(sampleDistMatrix))
 write.table(cbind(sample = rownames(sampleDistMatrix), sampleDistMatrix),file=paste(opt$outprefix, ".sample.dists.txt", sep=""),
             row.names=FALSE, sep="\t", quote=FALSE)
-dev.off()
+
 
 ################################################
 ################################################
@@ -342,37 +351,24 @@ save(normFactors, file=NormFactorsFile)
 
 for (name in names(sizeFactors(dds))) {
     sizeFactorFile <- paste(SizeFactorsDir,name, ".txt", sep="")
-    write(as.numeric(sizeFactors(dds)[name]), file=sizeFactorFile)
+    write(1/as.numeric(sizeFactors(dds)[name]), file=sizeFactorFile) # this makes scaling factors as in omni norm so multiplying counts by sf
 }
 
+# size factors actually used (DESeq2 default or OmniNorm-based)
+sf_used <- 1/sizeFactors(dds)
 
-# colData must have "Sample_ID" and "scaling" columns
-# sizeFactors(dds) are with the custom normalization or the DESEQ2 normalization
-# So we assemble the colData with the sizeFactors(dds) and write it to file
-colData <- data.frame(Sample_ID=colnames(assay(dds, vst_name)), scaling=as.numeric(sizeFactors(dds)))
-rownames(colData) <- colData$Sample_ID
+# Export DESeq2-normalized counts (raw / sizeFactors)
+de_norm <- sweep(raw_counts[, names(sf_used), drop=FALSE], 2, sf_used, "*")
+write.table(
+  cbind(gene_id = rownames(de_norm), de_norm),
+  file = file.path(opt$outdir, "Final_norm_count_mat.txt"),
+  sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE
+)
 
-write.table(cbind(Sample_ID=colData$Sample_ID,colData),file=paste(opt$outdir, "/scaling_dat.txt", sep=""),
-        row.names=FALSE, sep="\t", quote=FALSE)
-
-
-norm_mat <- dat_all[, colData$Sample_ID]
-norm_mat <- sweep(norm_mat[, colData$Sample_ID], 2, colData[, "scaling"], "*")
-
-write.table(cbind(gene_id=rownames(norm_mat),norm_mat),file=paste(opt$outdir, "/ALL_READS_norm.txt", sep=""),
-        row.names=FALSE, sep="\t", quote=FALSE)
-
-norm_mat <- dat_int[, colData$Sample_ID]
-norm_mat <- sweep(norm_mat[, colData$Sample_ID], 2, colData[, "scaling"], "*")
-
-write.table(cbind(gene_id=rownames(norm_mat),norm_mat),file=paste(opt$outdir, "/INTRON_READS_norm.txt", sep=""),
-        row.names=FALSE, sep="\t", quote=FALSE)
-
-norm_mat <- dat_ex[, colData$Sample_ID]
-norm_mat <- sweep(norm_mat[, colData$Sample_ID], 2, colData[, "scaling"], "*")
-
-write.table(cbind(gene_id=rownames(norm_mat),norm_mat),file=paste(opt$outdir, "/EXON_READS_norm.txt", sep=""),
-        row.names=FALSE, sep="\t", quote=FALSE)
+# Also keep a tidy table of sample scaling factors
+colData_out <- data.frame(Sample_ID = names(sf_used), scaling = as.numeric(sf_used))
+write.table(colData_out, file = file.path(opt$outdir, "scaling_dat.txt"),
+            row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
 
 
 ################################################
