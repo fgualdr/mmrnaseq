@@ -17,6 +17,8 @@ process BAM_EM_PREP {
     output:
     tuple val(meta), path("*.read_target_match.txt"), emit: read_target_match
     tuple val(meta), path("*.candidate_table.tsv"), emit: candidate_table
+    tuple val(meta), path("*.alignment_records.tsv"), emit: alignment_records
+    tuple val(meta), path("*.unique_anchor_points.tsv"), emit: unique_anchor_points
     tuple val(meta), path("*.labeled.nsort.bam"), emit: bam_label
     tuple val(meta), path("*.multi.hotspots.bed"), emit: mm_hotspots
     path "versions.yml"           , emit: versions
@@ -39,7 +41,7 @@ process BAM_EM_PREP {
     if(strandedness == 0){
         if(single_end){
             """
-            dist_r=${params.em_hotspot_distance ?: 2000}
+            dist_r=${params.em_locus_merge_distance ?: params.em_hotspot_distance ?: 2000}
 
             # Add the HI:i bit to each
             samtools view -h $bam | awk 'BEGIN{OFS="\\t"} \$1~/^@/{print;next} {for(i=12;i<=NF;i++){if(\$i~/^HI:i:/){ \$1=\$1"_"\$i}};print}' | samtools view -bS - > ${prefix}.labeled.bam
@@ -130,6 +132,36 @@ process BAM_EM_PREP {
             awk -F'\\t' 'NR>1 && (NF!=10 || \$7=="" || \$8=="" || \$9=="" || \$10==""){bad++}
                 END{if(bad>0){print "ERROR: " bad " malformed candidate-table rows" > "/dev/stderr"; exit 3}}' \\
                 ${prefix}.candidate_table.tsv
+
+
+            # Resolver data contract: one row per SAM alignment record (mate-aware for PE).
+            samtools view ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\t"}
+                {
+                    frag=\$1; sub("_HI:i:.*$","",frag);
+                    hi=""; nh=""; as=""; nm="";
+                    for(i=12;i<=NF;i++){
+                        if(\$i~/^HI:i:/){split(\$i,a,":");hi=a[3]}
+                        else if(\$i~/^NH:i:/){split(\$i,a,":");nh=a[3]}
+                        else if(\$i~/^AS:i:/){split(\$i,a,":");as=a[3]}
+                        else if(\$i~/^nM:i:/){split(\$i,a,":");nm=a[3]}
+                    }
+                    print \$1,frag,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,hi,nh,as,nm
+                }' > ${prefix}.alignment_records.body.tsv
+            printf 'alignment_id\tfragment_id\tflag\tchrom\tpos1\tmapq\tcigar\tmate_chrom\tmate_pos1\ttlen\thi\tnh\tas\tnM\n' > ${prefix}.alignment_records.tsv
+            cat ${prefix}.alignment_records.body.tsv >> ${prefix}.alignment_records.tsv
+
+            # Unique-fragment anchor endpoints. Each PE mate contributes weight 0.5;
+            # each SE alignment contributes 1.0. Supplementary/secondary records are excluded.
+            samtools view -h ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\t"}
+                /^@/{print;next}
+                {
+                    nh=0;
+                    for(i=12;i<=NF;i++) if(\$i~/^NH:i:/){split(\$i,a,":");nh=a[3]+0}
+                    if(nh==1 && and(\$2,2304)==0) print
+                }' | samtools view -bS - > ${prefix}.unique.primary.bam
+            bedtools bamtobed -i ${prefix}.unique.primary.bam | \\
+                awk -v pe='${single_end ? 0 : 1}' 'BEGIN{OFS="\t"}{mid=int((\$2+\$3)/2); w=(pe?0.5:1.0); id=\$4; sub("_HI:i:.*$","",id); print \$1,mid,w,(\$3-\$2),id}' | \\
+                LC_ALL=C sort -k1,1 -k2,2n > ${prefix}.unique_anchor_points.tsv
     
 
             samtools_version=\$(samtools --version 2>&1 | awk 'NR==1{print \$2; exit}')
@@ -142,7 +174,7 @@ process BAM_EM_PREP {
             """
         }else{
             """
-            dist_r=${params.em_hotspot_distance ?: 2000}
+            dist_r=${params.em_locus_merge_distance ?: params.em_hotspot_distance ?: 2000}
 
             # Add the HI:i bit to each
             samtools view -h $bam | awk 'BEGIN{OFS="\\t"} \$1~/^@/{print;next} {for(i=12;i<=NF;i++){if(\$i~/^HI:i:/){ \$1=\$1"_"\$i}};print}' | samtools view -bS - > ${prefix}.labeled.bam
@@ -235,6 +267,36 @@ process BAM_EM_PREP {
             awk -F'\\t' 'NR>1 && (NF!=10 || \$7=="" || \$8=="" || \$9=="" || \$10==""){bad++}
                 END{if(bad>0){print "ERROR: " bad " malformed candidate-table rows" > "/dev/stderr"; exit 3}}' \\
                 ${prefix}.candidate_table.tsv
+
+
+            # Resolver data contract: one row per SAM alignment record (mate-aware for PE).
+            samtools view ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\t"}
+                {
+                    frag=\$1; sub("_HI:i:.*$","",frag);
+                    hi=""; nh=""; as=""; nm="";
+                    for(i=12;i<=NF;i++){
+                        if(\$i~/^HI:i:/){split(\$i,a,":");hi=a[3]}
+                        else if(\$i~/^NH:i:/){split(\$i,a,":");nh=a[3]}
+                        else if(\$i~/^AS:i:/){split(\$i,a,":");as=a[3]}
+                        else if(\$i~/^nM:i:/){split(\$i,a,":");nm=a[3]}
+                    }
+                    print \$1,frag,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,hi,nh,as,nm
+                }' > ${prefix}.alignment_records.body.tsv
+            printf 'alignment_id\tfragment_id\tflag\tchrom\tpos1\tmapq\tcigar\tmate_chrom\tmate_pos1\ttlen\thi\tnh\tas\tnM\n' > ${prefix}.alignment_records.tsv
+            cat ${prefix}.alignment_records.body.tsv >> ${prefix}.alignment_records.tsv
+
+            # Unique-fragment anchor endpoints. Each PE mate contributes weight 0.5;
+            # each SE alignment contributes 1.0. Supplementary/secondary records are excluded.
+            samtools view -h ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\t"}
+                /^@/{print;next}
+                {
+                    nh=0;
+                    for(i=12;i<=NF;i++) if(\$i~/^NH:i:/){split(\$i,a,":");nh=a[3]+0}
+                    if(nh==1 && and(\$2,2304)==0) print
+                }' | samtools view -bS - > ${prefix}.unique.primary.bam
+            bedtools bamtobed -i ${prefix}.unique.primary.bam | \\
+                awk -v pe='${single_end ? 0 : 1}' 'BEGIN{OFS="\t"}{mid=int((\$2+\$3)/2); w=(pe?0.5:1.0); id=\$4; sub("_HI:i:.*$","",id); print \$1,mid,w,(\$3-\$2),id}' | \\
+                LC_ALL=C sort -k1,1 -k2,2n > ${prefix}.unique_anchor_points.tsv
     
 
             samtools_version=\$(samtools --version 2>&1 | awk 'NR==1{print \$2; exit}')
@@ -250,7 +312,7 @@ process BAM_EM_PREP {
         if(single_end){
             """
             ### Check properly !!!!!!!!!!!
-            dist_r=${params.em_hotspot_distance ?: 2000}
+            dist_r=${params.em_locus_merge_distance ?: params.em_hotspot_distance ?: 2000}
 
             # Add the HI:i bit to each
             samtools view -h $bam | awk 'BEGIN{OFS="\\t"} \$1~/^@/{print;next} {for(i=12;i<=NF;i++){if(\$i~/^HI:i:/){ \$1=\$1"_"\$i}};print}' | samtools view -bS - > ${prefix}.labeled.bam
@@ -376,6 +438,36 @@ process BAM_EM_PREP {
                 END{if(bad>0){print "ERROR: " bad " malformed candidate-table rows" > "/dev/stderr"; exit 3}}' \\
                 ${prefix}.candidate_table.tsv
 
+
+            # Resolver data contract: one row per SAM alignment record (mate-aware for PE).
+            samtools view ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\t"}
+                {
+                    frag=\$1; sub("_HI:i:.*$","",frag);
+                    hi=""; nh=""; as=""; nm="";
+                    for(i=12;i<=NF;i++){
+                        if(\$i~/^HI:i:/){split(\$i,a,":");hi=a[3]}
+                        else if(\$i~/^NH:i:/){split(\$i,a,":");nh=a[3]}
+                        else if(\$i~/^AS:i:/){split(\$i,a,":");as=a[3]}
+                        else if(\$i~/^nM:i:/){split(\$i,a,":");nm=a[3]}
+                    }
+                    print \$1,frag,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,hi,nh,as,nm
+                }' > ${prefix}.alignment_records.body.tsv
+            printf 'alignment_id\tfragment_id\tflag\tchrom\tpos1\tmapq\tcigar\tmate_chrom\tmate_pos1\ttlen\thi\tnh\tas\tnM\n' > ${prefix}.alignment_records.tsv
+            cat ${prefix}.alignment_records.body.tsv >> ${prefix}.alignment_records.tsv
+
+            # Unique-fragment anchor endpoints. Each PE mate contributes weight 0.5;
+            # each SE alignment contributes 1.0. Supplementary/secondary records are excluded.
+            samtools view -h ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\t"}
+                /^@/{print;next}
+                {
+                    nh=0;
+                    for(i=12;i<=NF;i++) if(\$i~/^NH:i:/){split(\$i,a,":");nh=a[3]+0}
+                    if(nh==1 && and(\$2,2304)==0) print
+                }' | samtools view -bS - > ${prefix}.unique.primary.bam
+            bedtools bamtobed -i ${prefix}.unique.primary.bam | \\
+                awk -v pe='${single_end ? 0 : 1}' 'BEGIN{OFS="\t"}{mid=int((\$2+\$3)/2); w=(pe?0.5:1.0); id=\$4; sub("_HI:i:.*$","",id); print \$1,mid,w,(\$3-\$2),id}' | \\
+                LC_ALL=C sort -k1,1 -k2,2n > ${prefix}.unique_anchor_points.tsv
+
             samtools_version=\$(samtools --version 2>&1 | awk 'NR==1{print \$2; exit}')
             bedtools_version=\$(bedtools --version 2>&1 | awk 'NR==1{print \$NF; exit}')
             {
@@ -387,7 +479,7 @@ process BAM_EM_PREP {
         }else{
             """
             
-            dist_r=${params.em_hotspot_distance ?: 2000}
+            dist_r=${params.em_locus_merge_distance ?: params.em_hotspot_distance ?: 2000}
 
             # Add the HI:i bit to each
             samtools view -h $bam | awk 'BEGIN{OFS="\\t"} \$1~/^@/{print;next} {for(i=12;i<=NF;i++){if(\$i~/^HI:i:/){ \$1=\$1"_"\$i}};print}' | samtools view -bS - > ${prefix}.labeled.bam
@@ -521,6 +613,36 @@ process BAM_EM_PREP {
             awk -F'\\t' 'NR>1 && (NF!=10 || \$7=="" || \$8=="" || \$9=="" || \$10==""){bad++}
                 END{if(bad>0){print "ERROR: " bad " malformed candidate-table rows" > "/dev/stderr"; exit 3}}' \\
                 ${prefix}.candidate_table.tsv
+
+
+            # Resolver data contract: one row per SAM alignment record (mate-aware for PE).
+            samtools view ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\t"}
+                {
+                    frag=\$1; sub("_HI:i:.*$","",frag);
+                    hi=""; nh=""; as=""; nm="";
+                    for(i=12;i<=NF;i++){
+                        if(\$i~/^HI:i:/){split(\$i,a,":");hi=a[3]}
+                        else if(\$i~/^NH:i:/){split(\$i,a,":");nh=a[3]}
+                        else if(\$i~/^AS:i:/){split(\$i,a,":");as=a[3]}
+                        else if(\$i~/^nM:i:/){split(\$i,a,":");nm=a[3]}
+                    }
+                    print \$1,frag,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,hi,nh,as,nm
+                }' > ${prefix}.alignment_records.body.tsv
+            printf 'alignment_id\tfragment_id\tflag\tchrom\tpos1\tmapq\tcigar\tmate_chrom\tmate_pos1\ttlen\thi\tnh\tas\tnM\n' > ${prefix}.alignment_records.tsv
+            cat ${prefix}.alignment_records.body.tsv >> ${prefix}.alignment_records.tsv
+
+            # Unique-fragment anchor endpoints. Each PE mate contributes weight 0.5;
+            # each SE alignment contributes 1.0. Supplementary/secondary records are excluded.
+            samtools view -h ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\t"}
+                /^@/{print;next}
+                {
+                    nh=0;
+                    for(i=12;i<=NF;i++) if(\$i~/^NH:i:/){split(\$i,a,":");nh=a[3]+0}
+                    if(nh==1 && and(\$2,2304)==0) print
+                }' | samtools view -bS - > ${prefix}.unique.primary.bam
+            bedtools bamtobed -i ${prefix}.unique.primary.bam | \\
+                awk -v pe='${single_end ? 0 : 1}' 'BEGIN{OFS="\t"}{mid=int((\$2+\$3)/2); w=(pe?0.5:1.0); id=\$4; sub("_HI:i:.*$","",id); print \$1,mid,w,(\$3-\$2),id}' | \\
+                LC_ALL=C sort -k1,1 -k2,2n > ${prefix}.unique_anchor_points.tsv
 
             samtools_version=\$(samtools --version 2>&1 | awk 'NR==1{print \$2; exit}')
             bedtools_version=\$(bedtools --version 2>&1 | awk 'NR==1{print \$NF; exit}')
