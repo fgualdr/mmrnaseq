@@ -49,7 +49,8 @@ workflow BAM_FILTER_EM {
     }
 
     emit:
-    bam      = ch_filter_bam           // channel: [ val(meta), [ bam ] ]
+    bam      = ch_filter_bam
+    candidate_table = params.skip_em ? Channel.empty() : BAM_EM_PREP.out.candidate_table           // channel: [ val(meta), [ bam ] ]
     versions = ch_versions                     // channel: [ versions.yml ]
 }
 

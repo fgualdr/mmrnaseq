@@ -16,6 +16,7 @@ process BAM_EM_PREP {
 
     output:
     tuple val(meta), path("*.read_target_match.txt"), emit: read_target_match
+    tuple val(meta), path("*.candidate_table.tsv"), emit: candidate_table
     tuple val(meta), path("*.labeled.nsort.bam"), emit: bam_label
     tuple val(meta), path("*.multi.hotspots.bed"), emit: mm_hotspots
     path "versions.yml"           , emit: versions
@@ -82,6 +83,53 @@ process BAM_EM_PREP {
             # Generate the read_target table for the EM which is composed of read_full_id, read_id_ori, target_id (add id_nomatch)
             awk -F'\\t' 'BEGIN{OFS="\\t"} {id=\$4;sub("_HI:.*", "", \$4); print id, \$4, \$10}' ${prefix}.nsort.match.fix.bed > ${prefix}.read_target.txt
             awk -F'\\t' 'BEGIN{OFS="\\t"} \$3!="id_nomatch"{print \$1, \$2, \$3}' ${prefix}.read_target.txt > ${prefix}.read_target_match.txt
+            awk -F'\t' 'BEGIN{OFS="\t"} {id=\$4; orig=\$4; sub("_HI:.*","",orig); if(\$10!="id_nomatch") print id,orig,\$10,\$1,\$2,\$3}' ${prefix}.nsort.match.fix.bed > ${prefix}.candidate_geometry.tsv
+            # Build one score record per STAR alignment (HI).
+            # The BAM is name-sorted after HI has been appended to QNAME, therefore the
+            # two PE mate records for one STAR alignment are adjacent. Collapse them
+            # with O(1) memory instead of storing every QNAME in an awk hash.
+            samtools view ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\\t"; prev=""}
+                {
+                    q=\$1; hi=""; nh=""; as=""; nm="";
+                    for(i=12;i<=NF;i++){
+                        if(\$i~/^HI:i:/){split(\$i,a,":");hi=a[3]}
+                        else if(\$i~/^NH:i:/){split(\$i,a,":");nh=a[3]}
+                        else if(\$i~/^AS:i:/){split(\$i,a,":");as=a[3]}
+                        else if(\$i~/^nM:i:/){split(\$i,a,":");nm=a[3]}
+                    }
+                    if(q!=prev){print q,hi,nh,as,nm; prev=q}
+                }' > ${prefix}.alignment_scores.tsv
+
+            # Join geometry and STAR scores by the HI-labelled alignment ID.
+            # sort/join keeps this step streaming and avoids an O(number_of_alignments)
+            # in-memory associative array.
+            LC_ALL=C sort -k1,1 ${prefix}.alignment_scores.tsv > ${prefix}.alignment_scores.sorted.tsv
+            LC_ALL=C sort -k1,1 ${prefix}.candidate_geometry.tsv > ${prefix}.candidate_geometry.sorted.tsv
+
+            LC_ALL=C join -t "\$(printf '\\t')" -v 2 -1 1 -2 1 \\
+                ${prefix}.alignment_scores.sorted.tsv \\
+                ${prefix}.candidate_geometry.sorted.tsv \\
+                > ${prefix}.candidate_missing_scores.tsv
+
+            if [ -s ${prefix}.candidate_missing_scores.tsv ]; then
+                echo "ERROR: candidate geometry rows could not be matched to STAR AS/NH/HI/nM records" >&2
+                head -20 ${prefix}.candidate_missing_scores.tsv >&2
+                exit 2
+            fi
+
+            LC_ALL=C join -t "\$(printf '\\t')" -1 1 -2 1 \\
+                -o 1.1,2.2,2.3,2.4,2.5,2.6,1.2,1.3,1.4,1.5 \\
+                ${prefix}.alignment_scores.sorted.tsv \\
+                ${prefix}.candidate_geometry.sorted.tsv \\
+                > ${prefix}.candidate_table.body.tsv
+
+            printf 'alignment_id\tfragment_id\ttarget_id\tchrom\tstart\tend\thi\tnh\tas\tnM\n' > ${prefix}.candidate_table.tsv
+            cat ${prefix}.candidate_table.body.tsv >> ${prefix}.candidate_table.tsv
+
+            # Fail early if the STAR scoring contract is not present.
+            awk -F'\\t' 'NR>1 && (NF!=10 || \$7=="" || \$8=="" || \$9=="" || \$10==""){bad++}
+                END{if(bad>0){print "ERROR: " bad " malformed candidate-table rows" > "/dev/stderr"; exit 3}}' \\
+                ${prefix}.candidate_table.tsv
     
 
             cat <<-END_VERSIONS > versions.yml
@@ -138,6 +186,53 @@ process BAM_EM_PREP {
             # Generate the read_target table for the EM which is composed of read_full_id, read_id_ori, target_id (add id_nomatch)
             awk -F'\\t' 'BEGIN{OFS="\\t"} {id=\$4;sub("_HI:.*", "", \$4); print id, \$4, \$8}' ${prefix}.nsort.match.fix.bed > ${prefix}.read_target.txt
             awk -F'\\t' 'BEGIN{OFS="\\t"} \$3!="id_nomatch"{print \$1, \$2, \$3}' ${prefix}.read_target.txt > ${prefix}.read_target_match.txt
+            awk -F'\t' 'BEGIN{OFS="\t"} {id=\$4; orig=\$4; sub("_HI:.*","",orig); if(\$8!="id_nomatch") print id,orig,\$8,\$1,\$2,\$3}' ${prefix}.nsort.match.fix.bed > ${prefix}.candidate_geometry.tsv
+            # Build one score record per STAR alignment (HI).
+            # The BAM is name-sorted after HI has been appended to QNAME, therefore the
+            # two PE mate records for one STAR alignment are adjacent. Collapse them
+            # with O(1) memory instead of storing every QNAME in an awk hash.
+            samtools view ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\\t"; prev=""}
+                {
+                    q=\$1; hi=""; nh=""; as=""; nm="";
+                    for(i=12;i<=NF;i++){
+                        if(\$i~/^HI:i:/){split(\$i,a,":");hi=a[3]}
+                        else if(\$i~/^NH:i:/){split(\$i,a,":");nh=a[3]}
+                        else if(\$i~/^AS:i:/){split(\$i,a,":");as=a[3]}
+                        else if(\$i~/^nM:i:/){split(\$i,a,":");nm=a[3]}
+                    }
+                    if(q!=prev){print q,hi,nh,as,nm; prev=q}
+                }' > ${prefix}.alignment_scores.tsv
+
+            # Join geometry and STAR scores by the HI-labelled alignment ID.
+            # sort/join keeps this step streaming and avoids an O(number_of_alignments)
+            # in-memory associative array.
+            LC_ALL=C sort -k1,1 ${prefix}.alignment_scores.tsv > ${prefix}.alignment_scores.sorted.tsv
+            LC_ALL=C sort -k1,1 ${prefix}.candidate_geometry.tsv > ${prefix}.candidate_geometry.sorted.tsv
+
+            LC_ALL=C join -t "\$(printf '\\t')" -v 2 -1 1 -2 1 \\
+                ${prefix}.alignment_scores.sorted.tsv \\
+                ${prefix}.candidate_geometry.sorted.tsv \\
+                > ${prefix}.candidate_missing_scores.tsv
+
+            if [ -s ${prefix}.candidate_missing_scores.tsv ]; then
+                echo "ERROR: candidate geometry rows could not be matched to STAR AS/NH/HI/nM records" >&2
+                head -20 ${prefix}.candidate_missing_scores.tsv >&2
+                exit 2
+            fi
+
+            LC_ALL=C join -t "\$(printf '\\t')" -1 1 -2 1 \\
+                -o 1.1,2.2,2.3,2.4,2.5,2.6,1.2,1.3,1.4,1.5 \\
+                ${prefix}.alignment_scores.sorted.tsv \\
+                ${prefix}.candidate_geometry.sorted.tsv \\
+                > ${prefix}.candidate_table.body.tsv
+
+            printf 'alignment_id\tfragment_id\ttarget_id\tchrom\tstart\tend\thi\tnh\tas\tnM\n' > ${prefix}.candidate_table.tsv
+            cat ${prefix}.candidate_table.body.tsv >> ${prefix}.candidate_table.tsv
+
+            # Fail early if the STAR scoring contract is not present.
+            awk -F'\\t' 'NR>1 && (NF!=10 || \$7=="" || \$8=="" || \$9=="" || \$10==""){bad++}
+                END{if(bad>0){print "ERROR: " bad " malformed candidate-table rows" > "/dev/stderr"; exit 3}}' \\
+                ${prefix}.candidate_table.tsv
     
 
             cat <<-END_VERSIONS > versions.yml
@@ -229,6 +324,53 @@ process BAM_EM_PREP {
             awk 'BEGIN{FS=OFS="\\t"} \$8=="."{\$8="id_nomatch"}1' ${prefix}.read_target.bed > ${prefix}.read_target.fix.bed
             awk -F'\\t' 'BEGIN{OFS="\\t"} {id=\$4;sub("_HI:.*", "", \$4); print id, \$4, \$8}' ${prefix}.read_target.fix.bed > ${prefix}.read_target.txt
             awk -F'\\t' 'BEGIN{OFS="\\t"} \$3!="id_nomatch"{print \$1, \$2, \$3}' ${prefix}.read_target.txt > ${prefix}.read_target_match.txt
+            awk -F'\t' 'BEGIN{OFS="\t"} {id=\$4; orig=\$4; sub("_HI:.*","",orig); if(\$8!="id_nomatch") print id,orig,\$8,\$1,\$2,\$3}' ${prefix}.read_target.fix.bed > ${prefix}.candidate_geometry.tsv
+            # Build one score record per STAR alignment (HI).
+            # The BAM is name-sorted after HI has been appended to QNAME, therefore the
+            # two PE mate records for one STAR alignment are adjacent. Collapse them
+            # with O(1) memory instead of storing every QNAME in an awk hash.
+            samtools view ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\\t"; prev=""}
+                {
+                    q=\$1; hi=""; nh=""; as=""; nm="";
+                    for(i=12;i<=NF;i++){
+                        if(\$i~/^HI:i:/){split(\$i,a,":");hi=a[3]}
+                        else if(\$i~/^NH:i:/){split(\$i,a,":");nh=a[3]}
+                        else if(\$i~/^AS:i:/){split(\$i,a,":");as=a[3]}
+                        else if(\$i~/^nM:i:/){split(\$i,a,":");nm=a[3]}
+                    }
+                    if(q!=prev){print q,hi,nh,as,nm; prev=q}
+                }' > ${prefix}.alignment_scores.tsv
+
+            # Join geometry and STAR scores by the HI-labelled alignment ID.
+            # sort/join keeps this step streaming and avoids an O(number_of_alignments)
+            # in-memory associative array.
+            LC_ALL=C sort -k1,1 ${prefix}.alignment_scores.tsv > ${prefix}.alignment_scores.sorted.tsv
+            LC_ALL=C sort -k1,1 ${prefix}.candidate_geometry.tsv > ${prefix}.candidate_geometry.sorted.tsv
+
+            LC_ALL=C join -t "\$(printf '\\t')" -v 2 -1 1 -2 1 \\
+                ${prefix}.alignment_scores.sorted.tsv \\
+                ${prefix}.candidate_geometry.sorted.tsv \\
+                > ${prefix}.candidate_missing_scores.tsv
+
+            if [ -s ${prefix}.candidate_missing_scores.tsv ]; then
+                echo "ERROR: candidate geometry rows could not be matched to STAR AS/NH/HI/nM records" >&2
+                head -20 ${prefix}.candidate_missing_scores.tsv >&2
+                exit 2
+            fi
+
+            LC_ALL=C join -t "\$(printf '\\t')" -1 1 -2 1 \\
+                -o 1.1,2.2,2.3,2.4,2.5,2.6,1.2,1.3,1.4,1.5 \\
+                ${prefix}.alignment_scores.sorted.tsv \\
+                ${prefix}.candidate_geometry.sorted.tsv \\
+                > ${prefix}.candidate_table.body.tsv
+
+            printf 'alignment_id\tfragment_id\ttarget_id\tchrom\tstart\tend\thi\tnh\tas\tnM\n' > ${prefix}.candidate_table.tsv
+            cat ${prefix}.candidate_table.body.tsv >> ${prefix}.candidate_table.tsv
+
+            # Fail early if the STAR scoring contract is not present.
+            awk -F'\\t' 'NR>1 && (NF!=10 || \$7=="" || \$8=="" || \$9=="" || \$10==""){bad++}
+                END{if(bad>0){print "ERROR: " bad " malformed candidate-table rows" > "/dev/stderr"; exit 3}}' \\
+                ${prefix}.candidate_table.tsv
 
             cat <<-END_VERSIONS > versions.yml
             "${task.process}":
@@ -326,6 +468,53 @@ process BAM_EM_PREP {
             awk 'BEGIN{FS=OFS="\\t"} \$8=="."{\$8="id_nomatch"}1' ${prefix}.read_target.bed > ${prefix}.read_target.fix.bed
             awk -F'\\t' 'BEGIN{OFS="\\t"} {id=\$4;sub("_HI:.*", "", \$4); print id, \$4, \$8}' ${prefix}.read_target.fix.bed > ${prefix}.read_target.txt
             awk -F'\\t' 'BEGIN{OFS="\\t"} \$3!="id_nomatch"{print \$1, \$2, \$3}' ${prefix}.read_target.txt > ${prefix}.read_target_match.txt
+            awk -F'\t' 'BEGIN{OFS="\t"} {id=\$4; orig=\$4; sub("_HI:.*","",orig); if(\$8!="id_nomatch") print id,orig,\$8,\$1,\$2,\$3}' ${prefix}.read_target.fix.bed > ${prefix}.candidate_geometry.tsv
+            # Build one score record per STAR alignment (HI).
+            # The BAM is name-sorted after HI has been appended to QNAME, therefore the
+            # two PE mate records for one STAR alignment are adjacent. Collapse them
+            # with O(1) memory instead of storing every QNAME in an awk hash.
+            samtools view ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\\t"; prev=""}
+                {
+                    q=\$1; hi=""; nh=""; as=""; nm="";
+                    for(i=12;i<=NF;i++){
+                        if(\$i~/^HI:i:/){split(\$i,a,":");hi=a[3]}
+                        else if(\$i~/^NH:i:/){split(\$i,a,":");nh=a[3]}
+                        else if(\$i~/^AS:i:/){split(\$i,a,":");as=a[3]}
+                        else if(\$i~/^nM:i:/){split(\$i,a,":");nm=a[3]}
+                    }
+                    if(q!=prev){print q,hi,nh,as,nm; prev=q}
+                }' > ${prefix}.alignment_scores.tsv
+
+            # Join geometry and STAR scores by the HI-labelled alignment ID.
+            # sort/join keeps this step streaming and avoids an O(number_of_alignments)
+            # in-memory associative array.
+            LC_ALL=C sort -k1,1 ${prefix}.alignment_scores.tsv > ${prefix}.alignment_scores.sorted.tsv
+            LC_ALL=C sort -k1,1 ${prefix}.candidate_geometry.tsv > ${prefix}.candidate_geometry.sorted.tsv
+
+            LC_ALL=C join -t "\$(printf '\\t')" -v 2 -1 1 -2 1 \\
+                ${prefix}.alignment_scores.sorted.tsv \\
+                ${prefix}.candidate_geometry.sorted.tsv \\
+                > ${prefix}.candidate_missing_scores.tsv
+
+            if [ -s ${prefix}.candidate_missing_scores.tsv ]; then
+                echo "ERROR: candidate geometry rows could not be matched to STAR AS/NH/HI/nM records" >&2
+                head -20 ${prefix}.candidate_missing_scores.tsv >&2
+                exit 2
+            fi
+
+            LC_ALL=C join -t "\$(printf '\\t')" -1 1 -2 1 \\
+                -o 1.1,2.2,2.3,2.4,2.5,2.6,1.2,1.3,1.4,1.5 \\
+                ${prefix}.alignment_scores.sorted.tsv \\
+                ${prefix}.candidate_geometry.sorted.tsv \\
+                > ${prefix}.candidate_table.body.tsv
+
+            printf 'alignment_id\tfragment_id\ttarget_id\tchrom\tstart\tend\thi\tnh\tas\tnM\n' > ${prefix}.candidate_table.tsv
+            cat ${prefix}.candidate_table.body.tsv >> ${prefix}.candidate_table.tsv
+
+            # Fail early if the STAR scoring contract is not present.
+            awk -F'\\t' 'NR>1 && (NF!=10 || \$7=="" || \$8=="" || \$9=="" || \$10==""){bad++}
+                END{if(bad>0){print "ERROR: " bad " malformed candidate-table rows" > "/dev/stderr"; exit 3}}' \\
+                ${prefix}.candidate_table.tsv
 
             cat <<-END_VERSIONS > versions.yml
             "${task.process}":
