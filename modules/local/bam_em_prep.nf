@@ -293,12 +293,12 @@ process BAM_EM_PREP {
             samtools index ${prefix}.rev.bam
 
             samtools sort -@ $task.cpus -m ${sort_memory}M -n -o ${prefix}.rev.nsort.bam -T ${prefix}.rev.nsort ${prefix}.rev.bam
-            bedtools bamtobed -i ${prefix}.rev.nsort.bam > ${prefix}.rev.nsort.bedpe 
+            bedtools bamtobed -i ${prefix}.rev.nsort.bam -bedpe > ${prefix}.rev.nsort.bedpe 
             cut -f 1,2,6,7 ${prefix}.rev.nsort.bedpe > ${prefix}.rev.nsort.bed
 
             # Separate multi from single:
             samtools view -h ${prefix}.rev.nsort.bam | awk 'BEGIN{OFS="\t"} /^@/{print;next} {nh=0; for(i=12;i<=NF;i++){if(\$i~/^NH:i:/){split(\$i,a,":"); nh=a[3]+0}} if(nh>1) print}' | samtools view -bS - > ${prefix}.labeled.multi.rev.bam
-            bedtools bamtobed -i ${prefix}.labeled.multi.rev.bam > ${prefix}.rev.nsort.multi.bedpe 
+            bedtools bamtobed -i ${prefix}.labeled.multi.rev.bam -bedpe > ${prefix}.rev.nsort.multi.bedpe 
 
             cut -f 1,2,6 ${prefix}.rev.nsort.multi.bedpe > ${prefix}.rev.multi.bed
             sort --parallel=$task.cpus -k1,1 -k2,2n ${prefix}.rev.multi.bed > ${prefix}.rev.multi.sort.bed
