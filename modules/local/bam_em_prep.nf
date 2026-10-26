@@ -132,11 +132,13 @@ process BAM_EM_PREP {
                 ${prefix}.candidate_table.tsv
     
 
-            cat <<-END_VERSIONS > versions.yml
-            "${task.process}":
-                samtools: \$(echo \$(samtools --version 2>&1) | sed 's/^.*samtools //; s/Using.*\$//')
-                bedtools: \$(echo \$(bedtools --version 2>&1) | sed 's/^.*bedtools //; s/Using.*\$//')
-            END_VERSIONS
+            samtools_version=\$(samtools --version 2>&1 | awk 'NR==1{print \$2; exit}')
+            bedtools_version=\$(bedtools --version 2>&1 | awk 'NR==1{print \$NF; exit}')
+            {
+                echo "\"${task.process}\":"
+                echo "    samtools: \"\$samtools_version\""
+                echo "    bedtools: \"\$bedtools_version\""
+            } > versions.yml
             """
         }else{
             """
@@ -235,11 +237,13 @@ process BAM_EM_PREP {
                 ${prefix}.candidate_table.tsv
     
 
-            cat <<-END_VERSIONS > versions.yml
-            "${task.process}":
-                samtools: \$(echo \$(samtools --version 2>&1) | sed 's/^.*samtools //; s/Using.*\$//')
-                bedtools: \$(echo \$(bedtools --version 2>&1) | sed 's/^.*bedtools //; s/Using.*\$//')
-            END_VERSIONS
+            samtools_version=\$(samtools --version 2>&1 | awk 'NR==1{print \$2; exit}')
+            bedtools_version=\$(bedtools --version 2>&1 | awk 'NR==1{print \$NF; exit}')
+            {
+                echo "\"${task.process}\":"
+                echo "    samtools: \"\$samtools_version\""
+                echo "    bedtools: \"\$bedtools_version\""
+            } > versions.yml
             """
         }
     } else {
@@ -372,11 +376,13 @@ process BAM_EM_PREP {
                 END{if(bad>0){print "ERROR: " bad " malformed candidate-table rows" > "/dev/stderr"; exit 3}}' \\
                 ${prefix}.candidate_table.tsv
 
-            cat <<-END_VERSIONS > versions.yml
-            "${task.process}":
-                samtools: \$(echo \$(samtools --version 2>&1) | sed 's/^.*samtools //; s/Using.*\$//')
-                bedtools: \$(echo \$(bedtools --version 2>&1) | sed 's/^.*bedtools //; s/Using.*\$//')
-            END_VERSIONS
+            samtools_version=\$(samtools --version 2>&1 | awk 'NR==1{print \$2; exit}')
+            bedtools_version=\$(bedtools --version 2>&1 | awk 'NR==1{print \$NF; exit}')
+            {
+                echo "\"${task.process}\":"
+                echo "    samtools: \"\$samtools_version\""
+                echo "    bedtools: \"\$bedtools_version\""
+            } > versions.yml
             """
         }else{
             """
@@ -516,11 +522,13 @@ process BAM_EM_PREP {
                 END{if(bad>0){print "ERROR: " bad " malformed candidate-table rows" > "/dev/stderr"; exit 3}}' \\
                 ${prefix}.candidate_table.tsv
 
-            cat <<-END_VERSIONS > versions.yml
-            "${task.process}":
-                samtools: \$(echo \$(samtools --version 2>&1) | sed 's/^.*samtools //; s/Using.*\$//')
-                bedtools: \$(echo \$(bedtools --version 2>&1) | sed 's/^.*bedtools //; s/Using.*\$//')
-            END_VERSIONS
+            samtools_version=\$(samtools --version 2>&1 | awk 'NR==1{print \$2; exit}')
+            bedtools_version=\$(bedtools --version 2>&1 | awk 'NR==1{print \$NF; exit}')
+            {
+                echo "\"${task.process}\":"
+                echo "    samtools: \"\$samtools_version\""
+                echo "    bedtools: \"\$bedtools_version\""
+            } > versions.yml
             """
         }
     }
