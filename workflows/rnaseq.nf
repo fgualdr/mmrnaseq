@@ -125,9 +125,6 @@ include { PREPARE_GENOME } from '../subworkflows/local/prepare_genome'
 include { ALIGN_STAR     } from '../subworkflows/local/align_star'
 include { BAM_FILTER_EM     } from '../subworkflows/local/bam_filter_em'
 
-include { SQUIRE_COUNT     } from '../modules/local/squire_count'
-include { SQUIRE_CLEAN      } from '../modules/local/squire_clean'
-
 include { QUANTIFY_SALMON as QUANTIFY_STAR_SALMON } from '../subworkflows/local/quantify_salmon'
 
 
@@ -634,30 +631,6 @@ workflow RNASEQ {
 
 
     // 
-    // Count using Squire - squire is a workflow that perform the cleaning and counting in one step:
-    // we run Squire only is Repeatmasker path is provided
-    // execute Squire only if skip_squire == false and rmsker exists
-
-    if(!params.skip_squire && params.rmsker) {
-
-        // 1) Apply Squire Clean - consider that each channel is staged in the temporary folder and we output to the default folder "clean"
-        SQUIRE_CLEAN( 
-            PREPARE_GENOME.out.gtf, 
-            ch_rmsker
-            ) 
-        clean_folder = SQUIRE_CLEAN.out.clean_folder
-        ch_versions = ch_versions.mix(SQUIRE_CLEAN.out.versions)
-
-        // 2) Apply SQUIRE_COUNT
-        SQUIRE_COUNT (
-             ch_bam_genome_bai,
-             PREPARE_GENOME.out.gtf,
-             clean_folder,
-             params.read_length
-        )
-        ch_versions = ch_versions.mix(SQUIRE_COUNT.out.versions)
-    }  
-
     // Add an if statement to execute the EM only if skip_em == false
     if(!params.skip_em) {
         BAM_FILTER_EM(  ch_bam_genome_bai, PREPARE_GENOME.out.chrom_sizes )
