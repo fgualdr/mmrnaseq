@@ -137,7 +137,7 @@ process BAM_EM_PREP {
             # Resolver data contract: one row per SAM alignment record (mate-aware for PE).
             samtools view ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\t"}
                 {
-                    frag=\$1; sub("_HI:i:.*$","",frag);
+                    frag=\$1; sub("_HI:i:.*\$","",frag);
                     hi=""; nh=""; as=""; nm="";
                     for(i=12;i<=NF;i++){
                         if(\$i~/^HI:i:/){split(\$i,a,":");hi=a[3]}
@@ -160,7 +160,7 @@ process BAM_EM_PREP {
                     if(nh==1 && and(\$2,2304)==0) print
                 }' | samtools view -bS - > ${prefix}.unique.primary.bam
             bedtools bamtobed -i ${prefix}.unique.primary.bam | \\
-                awk -v pe='${single_end ? 0 : 1}' 'BEGIN{OFS="\t"}{mid=int((\$2+\$3)/2); w=(pe?0.5:1.0); id=\$4; sub("_HI:i:.*$","",id); print \$1,mid,w,(\$3-\$2),id}' | \\
+                awk -v pe='${single_end ? 0 : 1}' 'BEGIN{OFS="\t"}{mid=int((\$2+\$3)/2); w=(pe?0.5:1.0); id=\$4; sub("_HI:i:.*\$","",id); print \$1,mid,w,(\$3-\$2),id}' | \\
                 LC_ALL=C sort -k1,1 -k2,2n > ${prefix}.unique_anchor_points.tsv
     
 
@@ -272,7 +272,7 @@ process BAM_EM_PREP {
             # Resolver data contract: one row per SAM alignment record (mate-aware for PE).
             samtools view ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\t"}
                 {
-                    frag=\$1; sub("_HI:i:.*$","",frag);
+                    frag=\$1; sub("_HI:i:.*\$","",frag);
                     hi=""; nh=""; as=""; nm="";
                     for(i=12;i<=NF;i++){
                         if(\$i~/^HI:i:/){split(\$i,a,":");hi=a[3]}
@@ -295,7 +295,7 @@ process BAM_EM_PREP {
                     if(nh==1 && and(\$2,2304)==0) print
                 }' | samtools view -bS - > ${prefix}.unique.primary.bam
             bedtools bamtobed -i ${prefix}.unique.primary.bam | \\
-                awk -v pe='${single_end ? 0 : 1}' 'BEGIN{OFS="\t"}{mid=int((\$2+\$3)/2); w=(pe?0.5:1.0); id=\$4; sub("_HI:i:.*$","",id); print \$1,mid,w,(\$3-\$2),id}' | \\
+                awk -v pe='${single_end ? 0 : 1}' 'BEGIN{OFS="\t"}{mid=int((\$2+\$3)/2); w=(pe?0.5:1.0); id=\$4; sub("_HI:i:.*\$","",id); print \$1,mid,w,(\$3-\$2),id}' | \\
                 LC_ALL=C sort -k1,1 -k2,2n > ${prefix}.unique_anchor_points.tsv
     
 
@@ -442,7 +442,7 @@ process BAM_EM_PREP {
             # Resolver data contract: one row per SAM alignment record (mate-aware for PE).
             samtools view ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\t"}
                 {
-                    frag=\$1; sub("_HI:i:.*$","",frag);
+                    frag=\$1; sub("_HI:i:.*\$","",frag);
                     hi=""; nh=""; as=""; nm="";
                     for(i=12;i<=NF;i++){
                         if(\$i~/^HI:i:/){split(\$i,a,":");hi=a[3]}
@@ -465,7 +465,7 @@ process BAM_EM_PREP {
                     if(nh==1 && and(\$2,2304)==0) print
                 }' | samtools view -bS - > ${prefix}.unique.primary.bam
             bedtools bamtobed -i ${prefix}.unique.primary.bam | \\
-                awk -v pe='${single_end ? 0 : 1}' 'BEGIN{OFS="\t"}{mid=int((\$2+\$3)/2); w=(pe?0.5:1.0); id=\$4; sub("_HI:i:.*$","",id); print \$1,mid,w,(\$3-\$2),id}' | \\
+                awk -v pe='${single_end ? 0 : 1}' 'BEGIN{OFS="\t"}{mid=int((\$2+\$3)/2); w=(pe?0.5:1.0); id=\$4; sub("_HI:i:.*\$","",id); print \$1,mid,w,(\$3-\$2),id}' | \\
                 LC_ALL=C sort -k1,1 -k2,2n > ${prefix}.unique_anchor_points.tsv
 
             samtools_version=\$(samtools --version 2>&1 | awk 'NR==1{print \$2; exit}')
@@ -618,7 +618,7 @@ process BAM_EM_PREP {
             # Resolver data contract: one row per SAM alignment record (mate-aware for PE).
             samtools view ${prefix}.labeled.nsort.bam | awk 'BEGIN{OFS="\t"}
                 {
-                    frag=\$1; sub("_HI:i:.*$","",frag);
+                    frag=\$1; sub("_HI:i:.*\$","",frag);
                     hi=""; nh=""; as=""; nm="";
                     for(i=12;i<=NF;i++){
                         if(\$i~/^HI:i:/){split(\$i,a,":");hi=a[3]}
@@ -641,7 +641,7 @@ process BAM_EM_PREP {
                     if(nh==1 && and(\$2,2304)==0) print
                 }' | samtools view -bS - > ${prefix}.unique.primary.bam
             bedtools bamtobed -i ${prefix}.unique.primary.bam | \\
-                awk -v pe='${single_end ? 0 : 1}' 'BEGIN{OFS="\t"}{mid=int((\$2+\$3)/2); w=(pe?0.5:1.0); id=\$4; sub("_HI:i:.*$","",id); print \$1,mid,w,(\$3-\$2),id}' | \\
+                awk -v pe='${single_end ? 0 : 1}' 'BEGIN{OFS="\t"}{mid=int((\$2+\$3)/2); w=(pe?0.5:1.0); id=\$4; sub("_HI:i:.*\$","",id); print \$1,mid,w,(\$3-\$2),id}' | \\
                 LC_ALL=C sort -k1,1 -k2,2n > ${prefix}.unique_anchor_points.tsv
 
             samtools_version=\$(samtools --version 2>&1 | awk 'NR==1{print \$2; exit}')
