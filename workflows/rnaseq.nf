@@ -20,7 +20,7 @@ checkPathParamList = [
     params.input, params.multiqc_config,params.public_data_ids,
     params.fasta, params.transcript_fasta, params.additional_fasta,
     params.gtf, params.gff, params.gene_bed,
-    params.ribo_database_manifest, params.splicesites,
+    params.ribo_database_manifest, params.splicesites, params.rmsker,
     params.star_index,  params.rsem_index, params.salmon_index
 ]
 for (param in checkPathParamList) { if (param) { file(param, checkIfExists: true) } }
@@ -69,6 +69,13 @@ if (params.bam_csi_index) {
 
 // Stage dummy file to be used as an optional input where required
 ch_dummy_file = file("$projectDir/assets/dummy_file.txt", checkIfExists: true)
+
+// RepeatMasker annotation is consumed by more than one process.
+// Wrap it in a reusable value channel so Nextflow stages the file correctly
+// into every task that declares it as a `path` input.
+ch_rmsker = params.rmsker
+    ? Channel.value(file(params.rmsker, checkIfExists: true))
+    : Channel.empty()
 
 // Check if an AWS iGenome has been provided to use the appropriate version of STAR
 def is_aws_igenome = false
@@ -636,7 +643,7 @@ workflow RNASEQ {
         // 1) Apply Squire Clean - consider that each channel is staged in the temporary folder and we output to the default folder "clean"
         SQUIRE_CLEAN( 
             PREPARE_GENOME.out.gtf, 
-            params.rmsker
+            ch_rmsker
             ) 
         clean_folder = SQUIRE_CLEAN.out.clean_folder
         ch_versions = ch_versions.mix(SQUIRE_CLEAN.out.versions)
@@ -686,7 +693,7 @@ workflow RNASEQ {
         ch_bam_genome_bai,
         PREP_GTF.out.txdb_sqlite,
         PREP_GTF.out.metadata,
-        params.rmsker // this must by the repmask .out. files
+        ch_rmsker // RepeatMasker .out/.out.gz staged as a Nextflow path
     )
 
     count_rds = INTRON_EXON_COUNT.out.count_rds
