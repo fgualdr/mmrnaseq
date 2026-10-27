@@ -1,0 +1,908 @@
+plugins = ['nf-boost@0.7.0']
+
+params {
+   input = null
+   public_data_ids = null
+   genome = null
+   splicesites = null
+   gtf_extra_attributes = 'gene_name'
+   gtf_group_features = 'gene_id'
+   featurecounts_feature_type = 'exon'
+   featurecounts_group_type = 'gene_biotype'
+   gencode = false
+   save_reference = false
+   igenomes_base = 's3://ngi-igenomes/igenomes'
+   igenomes_ignore = false
+   with_umi = false
+   skip_umi_extract = false
+   umitools_extract_method = 'string'
+   umitools_grouping_method = 'directional'
+   umitools_dedup_stats = false
+   umitools_bc_pattern = null
+   umitools_bc_pattern2 = null
+   umitools_umi_separator = null
+   umi_discard_read = null
+   save_umi_intermeds = false
+   trimmer = 'fastp'
+   min_trimmed_reads = 500000
+   extra_trimgalore_args = null
+   extra_fastp_args = null
+   save_trimmed = false
+   skip_trimming = false
+   read_length = 50
+   em_iter = 1000
+   em_seed = 1
+   em_locus_merge_distance = 2000
+   em_hotspot_distance = null
+   label_overlap = 0.25
+   rmsker = null
+   bbsplit_fasta_list = null
+   save_bbsplit_reads = false
+   skip_bbsplit = true
+   remove_ribo_rna = false
+   save_non_ribo_reads = false
+   ribo_database_manifest = '/hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/assets/rrna-db-defaults.txt'
+   aligner = 'star_salmon'
+   pseudo_aligner = null
+   seq_center = null
+   bam_csi_index = false
+   star_ignore_sjdbgtf = false
+   salmon_quant_libtype = null
+   hisat2_build_memory = '200.GB'
+   stringtie_ignore_gtf = false
+   min_mapped_reads = 5
+   star_multimap_max = 500
+   star_multimap_score_range = 1
+   star_filter_spurious_junctions = true
+   extra_star_align_args = null
+   extra_salmon_quant_args = null
+   save_merged_fastq = false
+   save_unaligned = false
+   save_align_intermeds = false
+   save_final_bam = true
+   save_rds_counts = false
+   skip_markduplicates = true
+   skip_alignment = false
+   skip_em = false
+   skip_quantify_salmon = false
+   skip_qc = false
+   skip_bigwig = false
+   skip_stringtie = false
+   skip_fastqc = false
+   skip_preseq = true
+   skip_dupradar = false
+   skip_qualimap = false
+   skip_rseqc = false
+   skip_biotype_qc = true
+   skip_deseq2_qc = false
+   skip_multiqc = false
+   deseq2_vst = true
+   rseqc_modules = 'bam_stat,inner_distance,infer_experiment,junction_annotation,junction_saturation,read_distribution,read_duplication'
+   normalize = true
+   sigma_times = 1
+   n_pop = 1
+   multiqc_config = null
+   multiqc_title = null
+   multiqc_logo = null
+   max_multiqc_email_size = '25.MB'
+   multiqc_methods_description = null
+   nf_boost_cleanup = false
+   outdir = null
+   publish_dir_mode = 'copy'
+   email = null
+   email_on_fail = null
+   plaintext_email = false
+   monochrome_logs = false
+   hook_url = null
+   help = false
+   version = false
+   validate_params = true
+   show_hidden_params = false
+   schema_ignore_params = 'genomes'
+   enable_conda = false
+   custom_config_version = 'master'
+   custom_config_base = 'https://raw.githubusercontent.com/nf-core/configs/master'
+   config_profile_description = 'The European Institute for oncology HPC cluster profile '
+   config_profile_contact = 'Francesco Gualdrini'
+   config_profile_url = null
+   config_profile_name = null
+   test_data_base = 'https://raw.githubusercontent.com/nf-core/test-datasets/rnaseq3'
+   max_memory = '250 GB'
+   max_cpus = 80
+   max_time = '180.h'
+   genomes {
+      GRCh37 {
+         fasta = 's3://ngi-igenomes/igenomes/Homo_sapiens/Ensembl/GRCh37/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Homo_sapiens/Ensembl/GRCh37/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Homo_sapiens/Ensembl/GRCh37/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Homo_sapiens/Ensembl/GRCh37/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Homo_sapiens/Ensembl/GRCh37/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Homo_sapiens/Ensembl/GRCh37/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Homo_sapiens/Ensembl/GRCh37/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Homo_sapiens/Ensembl/GRCh37/Annotation/README.txt'
+         mito_name = 'MT'
+         macs_gsize = '2.7e9'
+         blacklist = '/hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/assets/blacklists/GRCh37-blacklist.bed'
+      }
+      GRCh38 {
+         fasta = 's3://ngi-igenomes/igenomes/Homo_sapiens/NCBI/GRCh38/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Homo_sapiens/NCBI/GRCh38/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Homo_sapiens/NCBI/GRCh38/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Homo_sapiens/NCBI/GRCh38/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Homo_sapiens/NCBI/GRCh38/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Homo_sapiens/NCBI/GRCh38/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Homo_sapiens/NCBI/GRCh38/Annotation/Genes/genes.bed'
+         mito_name = 'chrM'
+         macs_gsize = '2.7e9'
+         blacklist = '/hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/assets/blacklists/hg38-blacklist.bed'
+      }
+      GRCm38 {
+         fasta = 's3://ngi-igenomes/igenomes/Mus_musculus/Ensembl/GRCm38/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Mus_musculus/Ensembl/GRCm38/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Mus_musculus/Ensembl/GRCm38/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Mus_musculus/Ensembl/GRCm38/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Mus_musculus/Ensembl/GRCm38/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Mus_musculus/Ensembl/GRCm38/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Mus_musculus/Ensembl/GRCm38/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Mus_musculus/Ensembl/GRCm38/Annotation/README.txt'
+         mito_name = 'MT'
+         macs_gsize = '1.87e9'
+         blacklist = '/hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/assets/blacklists/GRCm38-blacklist.bed'
+      }
+      TAIR10 {
+         fasta = 's3://ngi-igenomes/igenomes/Arabidopsis_thaliana/Ensembl/TAIR10/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Arabidopsis_thaliana/Ensembl/TAIR10/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Arabidopsis_thaliana/Ensembl/TAIR10/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Arabidopsis_thaliana/Ensembl/TAIR10/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Arabidopsis_thaliana/Ensembl/TAIR10/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Arabidopsis_thaliana/Ensembl/TAIR10/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Arabidopsis_thaliana/Ensembl/TAIR10/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Arabidopsis_thaliana/Ensembl/TAIR10/Annotation/README.txt'
+         mito_name = 'Mt'
+      }
+      EB2 {
+         fasta = 's3://ngi-igenomes/igenomes/Bacillus_subtilis_168/Ensembl/EB2/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Bacillus_subtilis_168/Ensembl/EB2/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Bacillus_subtilis_168/Ensembl/EB2/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Bacillus_subtilis_168/Ensembl/EB2/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Bacillus_subtilis_168/Ensembl/EB2/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Bacillus_subtilis_168/Ensembl/EB2/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Bacillus_subtilis_168/Ensembl/EB2/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Bacillus_subtilis_168/Ensembl/EB2/Annotation/README.txt'
+      }
+      'UMD3.1' {
+         fasta = 's3://ngi-igenomes/igenomes/Bos_taurus/Ensembl/UMD3.1/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Bos_taurus/Ensembl/UMD3.1/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Bos_taurus/Ensembl/UMD3.1/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Bos_taurus/Ensembl/UMD3.1/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Bos_taurus/Ensembl/UMD3.1/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Bos_taurus/Ensembl/UMD3.1/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Bos_taurus/Ensembl/UMD3.1/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Bos_taurus/Ensembl/UMD3.1/Annotation/README.txt'
+         mito_name = 'MT'
+      }
+      WBcel235 {
+         fasta = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/Ensembl/WBcel235/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/Ensembl/WBcel235/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/Ensembl/WBcel235/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/Ensembl/WBcel235/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/Ensembl/WBcel235/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/Ensembl/WBcel235/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/Ensembl/WBcel235/Annotation/Genes/genes.bed'
+         mito_name = 'MtDNA'
+         macs_gsize = '9e7'
+      }
+      'CanFam3.1' {
+         fasta = 's3://ngi-igenomes/igenomes/Canis_familiaris/Ensembl/CanFam3.1/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Canis_familiaris/Ensembl/CanFam3.1/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Canis_familiaris/Ensembl/CanFam3.1/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Canis_familiaris/Ensembl/CanFam3.1/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Canis_familiaris/Ensembl/CanFam3.1/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Canis_familiaris/Ensembl/CanFam3.1/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Canis_familiaris/Ensembl/CanFam3.1/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Canis_familiaris/Ensembl/CanFam3.1/Annotation/README.txt'
+         mito_name = 'MT'
+      }
+      GRCz10 {
+         fasta = 's3://ngi-igenomes/igenomes/Danio_rerio/Ensembl/GRCz10/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Danio_rerio/Ensembl/GRCz10/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Danio_rerio/Ensembl/GRCz10/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Danio_rerio/Ensembl/GRCz10/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Danio_rerio/Ensembl/GRCz10/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Danio_rerio/Ensembl/GRCz10/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Danio_rerio/Ensembl/GRCz10/Annotation/Genes/genes.bed'
+         mito_name = 'MT'
+      }
+      BDGP6 {
+         fasta = 's3://ngi-igenomes/igenomes/Drosophila_melanogaster/Ensembl/BDGP6/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Drosophila_melanogaster/Ensembl/BDGP6/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Drosophila_melanogaster/Ensembl/BDGP6/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Drosophila_melanogaster/Ensembl/BDGP6/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Drosophila_melanogaster/Ensembl/BDGP6/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Drosophila_melanogaster/Ensembl/BDGP6/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Drosophila_melanogaster/Ensembl/BDGP6/Annotation/Genes/genes.bed'
+         mito_name = 'M'
+         macs_gsize = '1.2e8'
+      }
+      EquCab2 {
+         fasta = 's3://ngi-igenomes/igenomes/Equus_caballus/Ensembl/EquCab2/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Equus_caballus/Ensembl/EquCab2/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Equus_caballus/Ensembl/EquCab2/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Equus_caballus/Ensembl/EquCab2/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Equus_caballus/Ensembl/EquCab2/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Equus_caballus/Ensembl/EquCab2/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Equus_caballus/Ensembl/EquCab2/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Equus_caballus/Ensembl/EquCab2/Annotation/README.txt'
+         mito_name = 'MT'
+      }
+      EB1 {
+         fasta = 's3://ngi-igenomes/igenomes/Escherichia_coli_K_12_DH10B/Ensembl/EB1/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Escherichia_coli_K_12_DH10B/Ensembl/EB1/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Escherichia_coli_K_12_DH10B/Ensembl/EB1/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Escherichia_coli_K_12_DH10B/Ensembl/EB1/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Escherichia_coli_K_12_DH10B/Ensembl/EB1/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Escherichia_coli_K_12_DH10B/Ensembl/EB1/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Escherichia_coli_K_12_DH10B/Ensembl/EB1/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Escherichia_coli_K_12_DH10B/Ensembl/EB1/Annotation/README.txt'
+      }
+      Galgal4 {
+         fasta = 's3://ngi-igenomes/igenomes/Gallus_gallus/Ensembl/Galgal4/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Gallus_gallus/Ensembl/Galgal4/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Gallus_gallus/Ensembl/Galgal4/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Gallus_gallus/Ensembl/Galgal4/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Gallus_gallus/Ensembl/Galgal4/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Gallus_gallus/Ensembl/Galgal4/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Gallus_gallus/Ensembl/Galgal4/Annotation/Genes/genes.bed'
+         mito_name = 'MT'
+      }
+      Gm01 {
+         fasta = 's3://ngi-igenomes/igenomes/Glycine_max/Ensembl/Gm01/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Glycine_max/Ensembl/Gm01/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Glycine_max/Ensembl/Gm01/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Glycine_max/Ensembl/Gm01/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Glycine_max/Ensembl/Gm01/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Glycine_max/Ensembl/Gm01/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Glycine_max/Ensembl/Gm01/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Glycine_max/Ensembl/Gm01/Annotation/README.txt'
+      }
+      Mmul_1 {
+         fasta = 's3://ngi-igenomes/igenomes/Macaca_mulatta/Ensembl/Mmul_1/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Macaca_mulatta/Ensembl/Mmul_1/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Macaca_mulatta/Ensembl/Mmul_1/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Macaca_mulatta/Ensembl/Mmul_1/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Macaca_mulatta/Ensembl/Mmul_1/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Macaca_mulatta/Ensembl/Mmul_1/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Macaca_mulatta/Ensembl/Mmul_1/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Macaca_mulatta/Ensembl/Mmul_1/Annotation/README.txt'
+         mito_name = 'MT'
+      }
+      'IRGSP-1.0' {
+         fasta = 's3://ngi-igenomes/igenomes/Oryza_sativa_japonica/Ensembl/IRGSP-1.0/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Oryza_sativa_japonica/Ensembl/IRGSP-1.0/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Oryza_sativa_japonica/Ensembl/IRGSP-1.0/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Oryza_sativa_japonica/Ensembl/IRGSP-1.0/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Oryza_sativa_japonica/Ensembl/IRGSP-1.0/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Oryza_sativa_japonica/Ensembl/IRGSP-1.0/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Oryza_sativa_japonica/Ensembl/IRGSP-1.0/Annotation/Genes/genes.bed'
+         mito_name = 'Mt'
+      }
+      'CHIMP2.1.4' {
+         fasta = 's3://ngi-igenomes/igenomes/Pan_troglodytes/Ensembl/CHIMP2.1.4/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Pan_troglodytes/Ensembl/CHIMP2.1.4/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Pan_troglodytes/Ensembl/CHIMP2.1.4/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Pan_troglodytes/Ensembl/CHIMP2.1.4/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Pan_troglodytes/Ensembl/CHIMP2.1.4/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Pan_troglodytes/Ensembl/CHIMP2.1.4/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Pan_troglodytes/Ensembl/CHIMP2.1.4/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Pan_troglodytes/Ensembl/CHIMP2.1.4/Annotation/README.txt'
+         mito_name = 'MT'
+      }
+      'Rnor_5.0' {
+         fasta = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/Ensembl/Rnor_5.0/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/Ensembl/Rnor_5.0/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/Ensembl/Rnor_5.0/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/Ensembl/Rnor_5.0/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/Ensembl/Rnor_5.0/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/Ensembl/Rnor_5.0/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/Ensembl/Rnor_5.0/Annotation/Genes/genes.bed'
+         mito_name = 'MT'
+      }
+      'Rnor_6.0' {
+         fasta = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/Ensembl/Rnor_6.0/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/Ensembl/Rnor_6.0/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/Ensembl/Rnor_6.0/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/Ensembl/Rnor_6.0/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/Ensembl/Rnor_6.0/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/Ensembl/Rnor_6.0/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/Ensembl/Rnor_6.0/Annotation/Genes/genes.bed'
+         mito_name = 'MT'
+      }
+      'R64-1-1' {
+         fasta = 's3://ngi-igenomes/igenomes/Saccharomyces_cerevisiae/Ensembl/R64-1-1/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Saccharomyces_cerevisiae/Ensembl/R64-1-1/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Saccharomyces_cerevisiae/Ensembl/R64-1-1/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Saccharomyces_cerevisiae/Ensembl/R64-1-1/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Saccharomyces_cerevisiae/Ensembl/R64-1-1/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Saccharomyces_cerevisiae/Ensembl/R64-1-1/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Saccharomyces_cerevisiae/Ensembl/R64-1-1/Annotation/Genes/genes.bed'
+         mito_name = 'MT'
+         macs_gsize = '1.2e7'
+      }
+      EF2 {
+         fasta = 's3://ngi-igenomes/igenomes/Schizosaccharomyces_pombe/Ensembl/EF2/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Schizosaccharomyces_pombe/Ensembl/EF2/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Schizosaccharomyces_pombe/Ensembl/EF2/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Schizosaccharomyces_pombe/Ensembl/EF2/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Schizosaccharomyces_pombe/Ensembl/EF2/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Schizosaccharomyces_pombe/Ensembl/EF2/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Schizosaccharomyces_pombe/Ensembl/EF2/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Schizosaccharomyces_pombe/Ensembl/EF2/Annotation/README.txt'
+         mito_name = 'MT'
+         macs_gsize = '1.21e7'
+      }
+      Sbi1 {
+         fasta = 's3://ngi-igenomes/igenomes/Sorghum_bicolor/Ensembl/Sbi1/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Sorghum_bicolor/Ensembl/Sbi1/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Sorghum_bicolor/Ensembl/Sbi1/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Sorghum_bicolor/Ensembl/Sbi1/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Sorghum_bicolor/Ensembl/Sbi1/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Sorghum_bicolor/Ensembl/Sbi1/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Sorghum_bicolor/Ensembl/Sbi1/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Sorghum_bicolor/Ensembl/Sbi1/Annotation/README.txt'
+      }
+      'Sscrofa10.2' {
+         fasta = 's3://ngi-igenomes/igenomes/Sus_scrofa/Ensembl/Sscrofa10.2/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Sus_scrofa/Ensembl/Sscrofa10.2/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Sus_scrofa/Ensembl/Sscrofa10.2/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Sus_scrofa/Ensembl/Sscrofa10.2/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Sus_scrofa/Ensembl/Sscrofa10.2/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Sus_scrofa/Ensembl/Sscrofa10.2/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Sus_scrofa/Ensembl/Sscrofa10.2/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Sus_scrofa/Ensembl/Sscrofa10.2/Annotation/README.txt'
+         mito_name = 'MT'
+      }
+      AGPv3 {
+         fasta = 's3://ngi-igenomes/igenomes/Zea_mays/Ensembl/AGPv3/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Zea_mays/Ensembl/AGPv3/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Zea_mays/Ensembl/AGPv3/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Zea_mays/Ensembl/AGPv3/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Zea_mays/Ensembl/AGPv3/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Zea_mays/Ensembl/AGPv3/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Zea_mays/Ensembl/AGPv3/Annotation/Genes/genes.bed'
+         mito_name = 'Mt'
+      }
+      hg38 {
+         fasta = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg38/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg38/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg38/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg38/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg38/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg38/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg38/Annotation/Genes/genes.bed'
+         mito_name = 'chrM'
+         macs_gsize = '2.7e9'
+         blacklist = '/hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/assets/blacklists/hg38-blacklist.bed'
+      }
+      hg19 {
+         fasta = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg19/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg19/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg19/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg19/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg19/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg19/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg19/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Homo_sapiens/UCSC/hg19/Annotation/README.txt'
+         mito_name = 'chrM'
+         macs_gsize = '2.7e9'
+         blacklist = '/hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/assets/blacklists/hg19-blacklist.bed'
+      }
+      mm10 {
+         fasta = 's3://ngi-igenomes/igenomes/Mus_musculus/UCSC/mm10/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Mus_musculus/UCSC/mm10/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Mus_musculus/UCSC/mm10/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Mus_musculus/UCSC/mm10/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Mus_musculus/UCSC/mm10/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Mus_musculus/UCSC/mm10/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Mus_musculus/UCSC/mm10/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Mus_musculus/UCSC/mm10/Annotation/README.txt'
+         mito_name = 'chrM'
+         macs_gsize = '1.87e9'
+         blacklist = '/hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/assets/blacklists/mm10-blacklist.bed'
+      }
+      bosTau8 {
+         fasta = 's3://ngi-igenomes/igenomes/Bos_taurus/UCSC/bosTau8/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Bos_taurus/UCSC/bosTau8/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Bos_taurus/UCSC/bosTau8/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Bos_taurus/UCSC/bosTau8/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Bos_taurus/UCSC/bosTau8/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Bos_taurus/UCSC/bosTau8/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Bos_taurus/UCSC/bosTau8/Annotation/Genes/genes.bed'
+         mito_name = 'chrM'
+      }
+      ce10 {
+         fasta = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/UCSC/ce10/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/UCSC/ce10/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/UCSC/ce10/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/UCSC/ce10/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/UCSC/ce10/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/UCSC/ce10/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/UCSC/ce10/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Caenorhabditis_elegans/UCSC/ce10/Annotation/README.txt'
+         mito_name = 'chrM'
+         macs_gsize = '9e7'
+      }
+      canFam3 {
+         fasta = 's3://ngi-igenomes/igenomes/Canis_familiaris/UCSC/canFam3/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Canis_familiaris/UCSC/canFam3/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Canis_familiaris/UCSC/canFam3/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Canis_familiaris/UCSC/canFam3/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Canis_familiaris/UCSC/canFam3/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Canis_familiaris/UCSC/canFam3/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Canis_familiaris/UCSC/canFam3/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Canis_familiaris/UCSC/canFam3/Annotation/README.txt'
+         mito_name = 'chrM'
+      }
+      danRer10 {
+         fasta = 's3://ngi-igenomes/igenomes/Danio_rerio/UCSC/danRer10/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Danio_rerio/UCSC/danRer10/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Danio_rerio/UCSC/danRer10/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Danio_rerio/UCSC/danRer10/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Danio_rerio/UCSC/danRer10/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Danio_rerio/UCSC/danRer10/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Danio_rerio/UCSC/danRer10/Annotation/Genes/genes.bed'
+         mito_name = 'chrM'
+         macs_gsize = '1.37e9'
+      }
+      dm6 {
+         fasta = 's3://ngi-igenomes/igenomes/Drosophila_melanogaster/UCSC/dm6/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Drosophila_melanogaster/UCSC/dm6/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Drosophila_melanogaster/UCSC/dm6/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Drosophila_melanogaster/UCSC/dm6/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Drosophila_melanogaster/UCSC/dm6/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Drosophila_melanogaster/UCSC/dm6/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Drosophila_melanogaster/UCSC/dm6/Annotation/Genes/genes.bed'
+         mito_name = 'chrM'
+         macs_gsize = '1.2e8'
+      }
+      equCab2 {
+         fasta = 's3://ngi-igenomes/igenomes/Equus_caballus/UCSC/equCab2/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Equus_caballus/UCSC/equCab2/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Equus_caballus/UCSC/equCab2/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Equus_caballus/UCSC/equCab2/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Equus_caballus/UCSC/equCab2/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Equus_caballus/UCSC/equCab2/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Equus_caballus/UCSC/equCab2/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Equus_caballus/UCSC/equCab2/Annotation/README.txt'
+         mito_name = 'chrM'
+      }
+      galGal4 {
+         fasta = 's3://ngi-igenomes/igenomes/Gallus_gallus/UCSC/galGal4/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Gallus_gallus/UCSC/galGal4/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Gallus_gallus/UCSC/galGal4/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Gallus_gallus/UCSC/galGal4/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Gallus_gallus/UCSC/galGal4/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Gallus_gallus/UCSC/galGal4/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Gallus_gallus/UCSC/galGal4/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Gallus_gallus/UCSC/galGal4/Annotation/README.txt'
+         mito_name = 'chrM'
+      }
+      panTro4 {
+         fasta = 's3://ngi-igenomes/igenomes/Pan_troglodytes/UCSC/panTro4/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Pan_troglodytes/UCSC/panTro4/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Pan_troglodytes/UCSC/panTro4/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Pan_troglodytes/UCSC/panTro4/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Pan_troglodytes/UCSC/panTro4/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Pan_troglodytes/UCSC/panTro4/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Pan_troglodytes/UCSC/panTro4/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Pan_troglodytes/UCSC/panTro4/Annotation/README.txt'
+         mito_name = 'chrM'
+      }
+      rn6 {
+         fasta = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/UCSC/rn6/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/UCSC/rn6/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/UCSC/rn6/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/UCSC/rn6/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/UCSC/rn6/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/UCSC/rn6/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Rattus_norvegicus/UCSC/rn6/Annotation/Genes/genes.bed'
+         mito_name = 'chrM'
+      }
+      sacCer3 {
+         fasta = 's3://ngi-igenomes/igenomes/Saccharomyces_cerevisiae/UCSC/sacCer3/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Saccharomyces_cerevisiae/UCSC/sacCer3/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Saccharomyces_cerevisiae/UCSC/sacCer3/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Saccharomyces_cerevisiae/UCSC/sacCer3/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Saccharomyces_cerevisiae/UCSC/sacCer3/Sequence/BismarkIndex/'
+         readme = 's3://ngi-igenomes/igenomes/Saccharomyces_cerevisiae/UCSC/sacCer3/Annotation/README.txt'
+         mito_name = 'chrM'
+         macs_gsize = '1.2e7'
+      }
+      susScr3 {
+         fasta = 's3://ngi-igenomes/igenomes/Sus_scrofa/UCSC/susScr3/Sequence/WholeGenomeFasta/genome.fa'
+         bwa = 's3://ngi-igenomes/igenomes/Sus_scrofa/UCSC/susScr3/Sequence/BWAIndex/version0.6.0/'
+         bowtie2 = 's3://ngi-igenomes/igenomes/Sus_scrofa/UCSC/susScr3/Sequence/Bowtie2Index/'
+         star = 's3://ngi-igenomes/igenomes/Sus_scrofa/UCSC/susScr3/Sequence/STARIndex/'
+         bismark = 's3://ngi-igenomes/igenomes/Sus_scrofa/UCSC/susScr3/Sequence/BismarkIndex/'
+         gtf = 's3://ngi-igenomes/igenomes/Sus_scrofa/UCSC/susScr3/Annotation/Genes/genes.gtf'
+         bed12 = 's3://ngi-igenomes/igenomes/Sus_scrofa/UCSC/susScr3/Annotation/Genes/genes.bed'
+         readme = 's3://ngi-igenomes/igenomes/Sus_scrofa/UCSC/susScr3/Annotation/README.txt'
+         mito_name = 'chrM'
+      }
+   }
+}
+
+process {
+   cpus = { check_max( 1    * task.attempt, 'cpus'   ) }
+   memory = { check_max( 6.GB * task.attempt, 'memory' ) }
+   time = { check_max( 4.h  * task.attempt, 'time'   ) }
+   errorStrategy = { task.exitStatus in [143,137,104,134,139] ? 'retry' : 'finish' }
+   maxRetries = 5
+   maxErrors = '-1'
+   withLabel:process_single {
+      cpus = { check_max( 1                  , 'cpus'    ) }
+      memory = { check_max( 6.GB * task.attempt, 'memory'  ) }
+      time = { check_max( 4.h  * task.attempt, 'time'    ) }
+   }
+   withLabel:process_low {
+      cpus = { check_max( 2     * task.attempt, 'cpus'    ) }
+      memory = { check_max( 6.GB * task.attempt, 'memory'  ) }
+      time = { check_max( 4.h   * task.attempt, 'time'    ) }
+   }
+   withLabel:process_medium {
+      cpus = { check_max( 10     * task.attempt, 'cpus'    ) }
+      memory = { check_max( 24.GB * task.attempt, 'memory'  ) }
+      time = { check_max( 18.h   * task.attempt, 'time'    ) }
+   }
+   withLabel:process_high {
+      cpus = { check_max( 12    * task.attempt, 'cpus'    ) }
+      memory = { check_max( 72.GB * task.attempt, 'memory'  ) }
+      time = { check_max( 16.h  * task.attempt, 'time'    ) }
+   }
+   withLabel:process_long {
+      time = { check_max( 48.h   * task.attempt, 'time'    ) }
+      cpus = { check_max( 5     * task.attempt, 'cpus'    ) }
+      memory = { check_max( 29.GB * task.attempt, 'memory'  ) }
+   }
+   withLabel:process_high_memory {
+      memory = { check_max( 59.GB * task.attempt, 'memory'  ) }
+      cpus = { check_max( 7     * task.attempt, 'cpus'    ) }
+      time = { check_max( 24.h   * task.attempt, 'time'    ) }
+   }
+   withLabel:error_ignore {
+      errorStrategy = 'ignore'
+   }
+   withLabel:error_retry {
+      errorStrategy = 'retry'
+      maxRetries = 2
+   }
+   withName:CUSTOM_DUMPSOFTWAREVERSIONS {
+      cache = false
+      publishDir = [path:{ "${params.outdir}/pipeline_info" }, mode:'copy', pattern:'*.yml']
+   }
+   publishDir = [path:{ "${params.outdir}/${task.process.tokenize(':')[-1].tokenize('_')[0].toLowerCase()}" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }]
+   withName:SAMPLESHEET_CHECK {
+      publishDir = [path:{ "${params.outdir}/pipeline_info" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }]
+   }
+   withName:SRX_DOWNLOAD {
+      publishDir = [path:{ "${params.outdir}/pipeline_info" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }]
+   }
+   withName:'GUNZIP_.*|MAKE_TRANSCRIPTS_FASTA' {
+      publishDir = [path:{ "${params.outdir}/genome" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
+   }
+   withName:'UNTAR_.*' {
+      ext {
+         args2 = '--no-same-owner'
+      }
+   }
+   withName:'UNTAR_.*|STAR_GENOMEGENERATE|STAR_GENOMEGENERATE_IGENOMES|HISAT2_BUILD' {
+      publishDir = [path:{ "${params.outdir}/genome/index" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
+      cpus = { check_max( 10     * task.attempt, 'cpus'    ) }
+      memory = { check_max( 70.GB * task.attempt, 'memory'  ) }
+      time = { check_max( 5.h   * task.attempt, 'time'    ) }
+   }
+   withName:'SRX_DOWNLOAD|FASTQ_FROM_SRA' {
+      publishDir = [path:{ "${params.outdir}/fastq_srx" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
+   }
+   withName:GFFREAD {
+      ext {
+         args = '--keep-exon-attrs -E -F -T'
+      }
+      publishDir = [path:{ "${params.outdir}/genome" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
+   }
+   withName:SALMON_INDEX {
+      ext {
+         args = ''
+      }
+      publishDir = [path:{ "${params.outdir}/genome/index" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
+   }
+   withName:RSEM_PREPAREREFERENCE_GENOME {
+      ext {
+         args = '--star'
+      }
+      publishDir = [path:{ "${params.outdir}/genome/index" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
+   }
+   withName:GTF2BED {
+      publishDir = [path:{ "${params.outdir}/genome" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
+   }
+   withName:'CAT_ADDITIONAL_FASTA|PREPROCESS_TRANSCRIPTS_FASTA_GENCODE' {
+      publishDir = [path:{ "${params.outdir}/genome" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
+   }
+   withName:GTF_GENE_FILTER {
+      publishDir = [path:{ "${params.outdir}/genome" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
+   }
+   withName:CUSTOM_GETCHROMSIZES {
+      publishDir = [path:{ "${params.outdir}/genome" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
+   }
+   withName:CAT_FASTQ {
+      publishDir = [path:{ "${params.outdir}/fastq" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
+   }
+   withName:FQ_SUBSAMPLE {
+      ext {
+         args = '--record-count 1000000 --seed 1'
+         prefix = { "${meta.id}.subsampled" }
+      }
+      publishDir = [path:{ "${params.outdir}/sample_fastq/fastq" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
+   }
+   withName:'.*:FASTQ_SUBSAMPLE_FQ_SALMON:SALMON_QUANT' {
+      ext {
+         args = '--skipQuant'
+      }
+      publishDir = [path:{ "${params.outdir}/sample_fastq/salmon" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') || filename.endsWith('_meta_info.json') ? null : filename }, enabled:false]
+   }
+   withName:'.*:FASTQ_FASTQC_UMITOOLS_FASTP:FASTQC_RAW' {
+      ext {
+         args = '--quiet'
+      }
+   }
+   withName:'.*:FASTQ_FASTQC_UMITOOLS_FASTP:FASTQC_TRIM' {
+      ext {
+         args = '--quiet'
+      }
+      publishDir = [path:{ "${params.outdir}/${params.trimmer}/fastqc" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }]
+   }
+   withName:'.*:FASTQ_FASTQC_UMITOOLS_FASTP:FASTP' {
+      ext {
+         args = ''
+      }
+      publishDir = [[path:{ "${params.outdir}/${params.trimmer}" }, mode:'copy', pattern:'*.{json,html}'], [path:{ "${params.outdir}/${params.trimmer}/log" }, mode:'copy', pattern:'*.log'], [path:{ "${params.outdir}/${params.trimmer}" }, mode:'copy', pattern:'*.fastq.gz', enabled:false]]
+   }
+   withName:'.*:ALIGN_STAR:BAM_SORT_STATS_SAMTOOLS:.*' {
+      ext {
+         prefix = { "${meta.id}.sorted.bam" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/samtools_stats" }, mode:'copy', pattern:'*.{stats,flagstat,idxstats}', enabled:false]
+   }
+   withName:'.*:ALIGN_STAR:BAM_SORT_STATS_SAMTOOLS:SAMTOOLS_SORT' {
+      ext {
+         prefix = { "${meta.id}.sorted" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}" }, mode:'copy', pattern:'*.bam', enabled:false]
+   }
+   withName:'.*:ALIGN_STAR:BAM_SORT_STATS_SAMTOOLS:SAMTOOLS_INDEX' {
+      ext {
+         args = ''
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}" }, mode:'copy', pattern:'*.{bai,csi}', enabled:false]
+   }
+   withName:'.*:BAM_FILTER_EM:BAM_FILTER' {
+      ext {
+         prefix = { "${meta.id}.filt" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/em_filt" }, mode:'copy', pattern:'*.{bam}', enabled:false]
+   }
+   withName:'.*:BAM_FILTER_EM:MM_CANDIDATE_PREP' {
+      ext {
+         prefix = { "${meta.id}" }
+      }
+      publishDir = [[path:{ "${params.outdir}/${params.aligner}/Final_BAM/mm_contract" }, mode:'copy', pattern:'*.{tsv,tsv.gz}', enabled:false]]
+   }
+   withName:'.*:BAM_FILTER_EM:BAM_EM_PREP' {
+      ext {
+         prefix = { "${meta.id}.prep" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/em_prep" }, mode:'copy', pattern:'*.{bed,tsv}', enabled:false]
+   }
+   withName:'.*:BAM_FILTER_EM:BAM_EM' {
+      ext {
+         prefix = { "${meta.id}.em" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/em" }, mode:'copy', pattern:'*.{bedpe,txt}', enabled:false]
+   }
+   withName:'.*:BAM_FILTER_EM:BAM_EM_OUT' {
+      ext {
+         prefix = { "${meta.id}.emout" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/em_out" }, mode:'copy', pattern:'*.{bam}', enabled:false]
+   }
+   withName:'.*:BAM_SORT_STATS_SAMTOOLS_BAM:BAM_STATS_SAMTOOLS:.*' {
+      ext {
+         prefix = { "${meta.id}.em.mark.filt" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/samtools_stats" }, mode:'copy', pattern:'*.{stats,flagstat,idxstats}', enabled:true]
+   }
+   withName:'.*:BAM_SORT_STATS_SAMTOOLS_BAM:SAMTOOLS_SORT' {
+      ext {
+         prefix = { "${meta.id}.em.mark.filt.sorted" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM" }, mode:'copy', pattern:'*.bam']
+   }
+   withName:'.*:BAM_SORT_STATS_SAMTOOLS_BAM:SAMTOOLS_INDEX' {
+      ext {
+         prefix = { "${meta.id}.em.mark.filt" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM" }, mode:'copy', pattern:'*.{bai,csi}']
+   }
+   withName:BEDTOOLS_GENOMECOV {
+      ext {
+         args = '-split -du'
+      }
+      publishDir = [path:{ "${params.outdir}/bedtools/${meta.id}" }, enabled:false]
+   }
+   withName:'.*:ALIGN_STAR:STAR_ALIGN|.*:ALIGN_STAR:STAR_ALIGN_IGENOMES' {
+      ext {
+         args = '--alignEndsType EndToEnd --quantMode TranscriptomeSAM --twopassMode Basic --outSAMtype BAM Unsorted --readFilesCommand zcat --runRNGseed 0 --outFilterMultimapNmax 500 --winAnchorMultimapNmax 500 --outFilterMultimapScoreRange 1 --outSAMmultNmax -1 --outFilterType BySJout --alignSJoverhangMin 8 --outFilterIntronMotifs RemoveNoncanonicalUnannotated --alignEndsProtrude 200 DiscordantPair --outFilterScoreMinOverLread 0.4 --outFilterMatchNminOverLread 0.4 --alignSJDBoverhangMin 1 --outSAMattributes All --quantTranscriptomeBan Singleend --outSAMstrandField intronMotif'
+      }
+      publishDir = [[path:{ "${params.outdir}/${params.aligner}/log" }, mode:'copy', pattern:'*.{out,tab}'], [path:{ "${params.outdir}/${params.aligner}" }, mode:'copy', pattern:'*.bam', enabled:false], [path:{ "${params.outdir}/${params.aligner}/unmapped" }, mode:'copy', pattern:'*.fastq.gz', enabled:false]]
+      cpus = { check_max( 10     * task.attempt, 'cpus'    ) }
+      memory = { check_max( 49.GB * task.attempt, 'memory'  ) }
+      time = { check_max( 5.h   * task.attempt, 'time'    ) }
+   }
+   withName:'.*:QUANTIFY_SALMON:SALMON_QUANT' {
+      ext {
+         args = ''
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/salmon_quant" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') || filename.endsWith('_meta_info.json') ? null : filename }]
+   }
+   withName:'.*:QUANTIFY_SALMON:SALMON_TX2GENE' {
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/salmon_tx2gene" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }]
+   }
+   withName:'.*:QUANTIFY_SALMON:SALMON_TXIMPORT' {
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/salmon_tximport" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }]
+   }
+   withName:'.*:QUANTIFY_SALMON:SALMON_SE_.*' {
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/salmon_se_gene" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }]
+   }
+   withName:INTRON_EXON_COUNT {
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Intron_exon_count" }, mode:'copy', enabled:false]
+   }
+   withName:DESEQ2_QC_STAR_SALMON {
+      ext {
+         args = '--id_col 1 --sample_suffix \'\' --outprefix deseq2 --count_col 3 --vst TRUE'
+         args2 = 'star_salmon'
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/deseq2_qc" }, mode:'copy']
+   }
+   withName:NORMALIZE_COUNTS_INTRON_EXON {
+      ext {
+         args = '--outprefix norm_deseq2_intron_exon --vst TRUE'
+         args2 = 'custom_counts'
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/norm_deseq2_intron_exon" }, mode:'copy']
+   }
+   withName:QUALIMAP_RNASEQ {
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/qualimap" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }]
+   }
+   withName:DUPRADAR {
+      publishDir = [[path:{ "${params.outdir}/${params.aligner}/dupradar/scatter_plot" }, mode:'copy', pattern:'*Dens.pdf'], [path:{ "${params.outdir}/${params.aligner}/dupradar/box_plot" }, mode:'copy', pattern:'*Boxplot.pdf'], [path:{ "${params.outdir}/${params.aligner}/dupradar/histogram" }, mode:'copy', pattern:'*Hist.pdf'], [path:{ "${params.outdir}/${params.aligner}/dupradar/gene_data" }, mode:'copy', pattern:'*Matrix.txt'], [path:{ "${params.outdir}/${params.aligner}/dupradar/intercepts_slope" }, mode:'copy', pattern:'*slope.txt']]
+   }
+   withName:'.*:BAM_RSEQC:RSEQC_BAMSTAT' {
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/rseqc/bam_stat" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }]
+   }
+   withName:'.*:BAM_RSEQC:RSEQC_INFEREXPERIMENT' {
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/rseqc/infer_experiment" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }]
+   }
+   withName:'.*:BAM_RSEQC:RSEQC_JUNCTIONANNOTATION' {
+      publishDir = [[path:{ "${params.outdir}/${params.aligner}/rseqc/junction_annotation/pdf" }, mode:'copy', pattern:'*.pdf'], [path:{ "${params.outdir}/${params.aligner}/rseqc/junction_annotation/bed" }, mode:'copy', pattern:'*.bed'], [path:{ "${params.outdir}/${params.aligner}/rseqc/junction_annotation/xls" }, mode:'copy', pattern:'*.xls'], [path:{ "${params.outdir}/${params.aligner}/rseqc/junction_annotation/log" }, mode:'copy', pattern:'*.log'], [path:{ "${params.outdir}/${params.aligner}/rseqc/junction_annotation/rscript" }, mode:'copy', pattern:'*.r']]
+   }
+   withName:'.*:BAM_RSEQC:RSEQC_JUNCTIONSATURATION' {
+      publishDir = [[path:{ "${params.outdir}/${params.aligner}/rseqc/junction_saturation/pdf" }, mode:'copy', pattern:'*.pdf'], [path:{ "${params.outdir}/${params.aligner}/rseqc/junction_saturation/rscript" }, mode:'copy', pattern:'*.r']]
+   }
+   withName:'.*:BAM_RSEQC:RSEQC_READDUPLICATION' {
+      publishDir = [[path:{ "${params.outdir}/${params.aligner}/rseqc/read_duplication/pdf" }, mode:'copy', pattern:'*.pdf'], [path:{ "${params.outdir}/${params.aligner}/rseqc/read_duplication/xls" }, mode:'copy', pattern:'*.xls'], [path:{ "${params.outdir}/${params.aligner}/rseqc/read_duplication/rscript" }, mode:'copy', pattern:'*.r']]
+   }
+   withName:'.*:BAM_RSEQC:RSEQC_READDISTRIBUTION' {
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/rseqc/read_distribution" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }]
+   }
+   withName:'.*:BAM_RSEQC:RSEQC_INNERDISTANCE' {
+      publishDir = [[path:{ "${params.outdir}/${params.aligner}/rseqc/inner_distance/txt" }, mode:'copy', pattern:'*.txt', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }], [path:{ "${params.outdir}/${params.aligner}/rseqc/inner_distance/pdf" }, mode:'copy', pattern:'*.pdf'], [path:{ "${params.outdir}/${params.aligner}/rseqc/inner_distance/rscript" }, mode:'copy', pattern:'*.r']]
+   }
+   withName:MULTIQC {
+      ext {
+         args = ''
+      }
+      publishDir = [path:{ [
+                    "${params.outdir}/multiqc",
+                    params.skip_alignment? '' : "/${params.aligner}"
+                    ].join('') }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }]
+   }
+   executor = 'slurm'
+   stageInMode = 'symlink'
+   stageOutMode = 'copy'
+   beforeExit = 'sync && sleep 10'
+   stageOutCommand = '\n            for i in {1..5}; do\n            rsync -av --partial --append-verify --inplace --checksum -rRl {from} {to} && break\n            echo "Rsync failed, retrying in 30s (attempt $i)" >&2\n            sleep 30\n            done\n        '
+   container = '/hpcnfs/techunits/bioinformatics/singularity/genomics25_v2.23.sif'
+   withLabel:process_picard {
+      cpus = { check_max( 3     * task.attempt, 'cpus'    ) }
+      memory = { check_max( 33.GB * task.attempt, 'memory'  ) }
+      time = { check_max( 24.h   * task.attempt, 'time'    ) }
+   }
+   withLabel:process_samtools_sort {
+      cpus = { check_max( 10     * task.attempt, 'cpus'    ) }
+      memory = { check_max( 49.GB * task.attempt, 'memory'  ) }
+      time = { check_max( 24.h   * task.attempt, 'time'    ) }
+   }
+   withName:'NFCORE_RNASEQ:RNASEQ:FASTQ_FROM_SRA:SRX_DOWNLOAD.*' {
+      cpus = 5
+      memory = '32 GB'
+      time = '24h'
+      errorStrategy = 'retry'
+   }
+}
+
+env {
+   PYTHONNOUSERSITE = 1
+   R_PROFILE_USER = '/.Rprofile'
+   R_ENVIRON_USER = '/.Renviron'
+   JULIA_DEPOT_PATH = '/usr/local/share/julia'
+   PATH = '$PATH:/hpcnfs/software/singularity/3.11.4/bin/:/hpcnfs/software/anaconda/anaconda3/bin/'
+}
+
+boost {
+   cleanup = false
+   cleanupInterval = '60s'
+}
+
+timeline {
+   enabled = true
+   file = 'timeline.html'
+   overwrite = true
+}
+
+report {
+   enabled = true
+   file = 'report.html'
+   overwrite = true
+}
+
+trace {
+   enabled = true
+   file = 'trace.txt'
+   overwrite = true
+}
+
+dag {
+   enabled = true
+   file = 'pipeline_dag.html'
+   overwrite = true
+}
+
+manifest {
+   name = 'nf-core/rnaseq'
+   author = 'Harshil Patel, Phil Ewels, Rickard Hammarén'
+   homePage = 'https://github.com/nf-core/rnaseq'
+   description = 'RNA sequencing analysis pipeline for gene/isoform quantification and extensive quality control.'
+   mainScript = 'main.nf'
+   nextflowVersion = '!>=25.10.4'
+   version = '3.11.1'
+   doi = 'https://doi.org/10.5281/zenodo.1400710'
+}
+
+singularity {
+   enabled = true
+   autoMounts = true
+   runOptions = '--bind /hpcnfs --bind /hpcscratch/ieo/ieo5244 --bind /hpcbeescratch --bind /lscratch --bind /beegfs/scratch/ieo5244'
+}
+
+executor {
+   $slurm {
+      submitRateLimit = '5/1min'
+      exitReadTimeout = '10 min'
+      queueSize = 15
+      pollInterval = '180sec'
+   }
+   $local {
+      cpus = 2
+      queueSize = 1
+      memory = '6 GB'
+   }
+}

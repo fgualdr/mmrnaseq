@@ -573,6 +573,14 @@
                     "minimum": 0.0,
                     "maximum": 1.0,
                     "description": "Minimum fraction of a read/fragment interval that must overlap a hotspot when assigning it to the local prior region."
+                },
+                "mm_resolution_fdr": {
+                    "type": "number",
+                    "default": 0.05,
+                    "minimum": 1e-06,
+                    "maximum": 0.5,
+                    "description": "Posterior expected false-assignment rate for hard multimapper resolution.",
+                    "help_text": "Fragments are ranked by posterior error (1-pmax). The largest set whose mean posterior error is no greater than this value is marked RESOLVED. Poor absolute alignments remain unresolved regardless of posterior rank."
                 }
             }
         },
