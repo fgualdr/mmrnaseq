@@ -158,6 +158,8 @@ include { FASTQ_FASTQC_UMITOOLS_TRIMGALORE } from '../subworkflows/nf-core/fastq
 include { FASTQ_FASTQC_UMITOOLS_FASTP      } from '../subworkflows/nf-core/fastq_fastqc_umitools_fastp/main'
 include { BAM_SORT_STATS_SAMTOOLS  as BAM_SORT_STATS_SAMTOOLS_UMI        } from '../subworkflows/nf-core/bam_sort_stats_samtools/main'
 include { BAM_SORT_STATS_SAMTOOLS  as BAM_SORT_STATS_SAMTOOLS_BAM        } from '../subworkflows/nf-core/bam_sort_stats_samtools/main'
+include { BAM_SORT_STATS_SAMTOOLS  as BAM_SORT_STATS_SAMTOOLS_MM_FULL     } from '../subworkflows/nf-core/bam_sort_stats_samtools/main'
+include { BAM_SORT_STATS_SAMTOOLS  as BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF } from '../subworkflows/nf-core/bam_sort_stats_samtools/main'
 include { BAM_MARKDUPLICATES_PICARD        } from '../subworkflows/nf-core/bam_markduplicates_picard/main'
 include { BAM_RSEQC                        } from '../subworkflows/nf-core/bam_rseqc/main'
 include { BAM_DEDUP_STATS_SAMTOOLS_UMITOOLS as BAM_DEDUP_STATS_SAMTOOLS_UMITOOLS_GENOME        } from '../subworkflows/nf-core/bam_dedup_stats_samtools_umitools/main'
@@ -630,14 +632,28 @@ workflow RNASEQ {
         .set { ch_bam_genome_bai }
 
 
-    // 
-    // Add an if statement to execute the EM only if skip_em == false
+    //
+    // Resolve STAR multimappers. The main quantitative BAM contains trusted unique
+    // fragments plus all fragments accepted by the resolver's global posterior
+    // expected-FDR rule. A stricter per-fragment high-confidence BAM and an archival
+    // full-ambiguity BAM are realized separately and never substituted silently.
     if(!params.skip_em) {
-        BAM_FILTER_EM(  ch_bam_genome_bai, PREPARE_GENOME.out.chrom_sizes )
-        ch_versions       = ch_versions.mix(BAM_FILTER_EM.out.versions)
-        ch_genome_bam = BAM_FILTER_EM.out.bam
+        BAM_FILTER_EM(ch_bam_genome_bai, PREPARE_GENOME.out.chrom_sizes)
+        ch_versions        = ch_versions.mix(BAM_FILTER_EM.out.versions)
+        ch_genome_bam      = BAM_FILTER_EM.out.bam_quantitative
+        ch_mm_highconf_bam = BAM_FILTER_EM.out.bam_highconf
+        ch_mm_full_bam     = BAM_FILTER_EM.out.bam_full
     }
-    
+
+    // Sort/index the two non-primary BAM tiers separately. Their statistics are
+    // retained for QC, while locus-level downstream counting continues on the
+    // globally expected-FDR-controlled quantitative BAM below.
+    if(!params.skip_em) {
+        BAM_SORT_STATS_SAMTOOLS_MM_FULL(ch_mm_full_bam, PREPARE_GENOME.out.fasta)
+        BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF(ch_mm_highconf_bam, PREPARE_GENOME.out.fasta)
+        ch_versions = ch_versions.mix(BAM_SORT_STATS_SAMTOOLS_MM_FULL.out.versions)
+        ch_versions = ch_versions.mix(BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF.out.versions)
+    }
 
     // Execute the BAM_SORT_STATS_SAMTOOLS_BAM
     BAM_SORT_STATS_SAMTOOLS_BAM(ch_genome_bam, PREPARE_GENOME.out.fasta)
