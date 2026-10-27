@@ -13,6 +13,7 @@ process INTRON_EXON_COUNT {
     output:
     path '*.gene.rds', emit: count_rds
     path '*.rmsk.rds', emit: rmsk_rds
+    path 'versions.yml', emit: versions
 
     script:
     

@@ -685,6 +685,8 @@ workflow RNASEQ {
         ch_rmsker // RepeatMasker .out/.out.gz staged as a Nextflow path
     )
 
+    ch_versions = ch_versions.mix(INTRON_EXON_COUNT.out.versions.first())
+
     count_rds = INTRON_EXON_COUNT.out.count_rds
     ch_all_rds = count_rds.toList()
     ch_all_rds.view()
