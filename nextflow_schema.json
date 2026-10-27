@@ -870,6 +870,12 @@
                     "description": "Run this workflow with Conda. You can also use '-profile conda' instead of providing this parameter.",
                     "hidden": true,
                     "fa_icon": "fas fa-bacon"
+                },
+                "nf_boost_cleanup": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enable nf-boost automatic cleanup of completed task work files.",
+                    "help_text": "Disabled by default because nf-boost cleanup removes cached task outputs and therefore prevents normal reuse of those tasks with -resume. Enable only for production runs where reclaiming work-directory space is more important than resumability."
                 }
             }
         }
