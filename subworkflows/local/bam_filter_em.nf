@@ -9,6 +9,7 @@ include { BAM_FILTER }        from '../../modules/local/bam_filter'
 include { MM_CANDIDATE_PREP } from '../../modules/local/mm_candidate_prep'
 include { MM_BAYES_RESOLVER } from '../../modules/local/mm_bayes_resolver'
 include { MM_BAM_REALIZE }    from '../../modules/local/mm_bam_realize'
+include { MM_QC_MERGE }       from '../../modules/local/mm_qc_merge'
 
 workflow BAM_FILTER_EM {
     take:
@@ -45,6 +46,18 @@ workflow BAM_FILTER_EM {
         ch_quantitative_bam = MM_BAM_REALIZE.out.quantitative_bam
         ch_highconf_bam     = MM_BAM_REALIZE.out.highconf_bam
         ch_full_bam         = MM_BAM_REALIZE.out.full_bam
+
+        // Merge and validate PATCH01 contract, PATCH02P posterior-resolution,
+        // PATCH03 BAM realization, and sample/orientation-specific density QC.
+        MM_CANDIDATE_PREP.out.qc
+            .join(MM_BAYES_RESOLVER.out.qc, by: [0])
+            .join(MM_BAM_REALIZE.out.qc, by: [0])
+            .join(MM_BAYES_RESOLVER.out.density_model, by: [0])
+            .join(MM_BAYES_RESOLVER.out.density_cv, by: [0])
+            .set { ch_mm_qc_inputs }
+
+        MM_QC_MERGE(ch_mm_qc_inputs)
+        ch_versions = ch_versions.mix(MM_QC_MERGE.out.versions.first())
     } else {
         ch_quantitative_bam = BAM_FILTER.out.bam
         ch_highconf_bam     = BAM_FILTER.out.bam
@@ -69,6 +82,9 @@ workflow BAM_FILTER_EM {
     mm_resolution = params.skip_em ? Channel.empty() : MM_BAYES_RESOLVER.out.resolution
     mm_resolver_qc = params.skip_em ? Channel.empty() : MM_BAYES_RESOLVER.out.qc
     mm_density_model = params.skip_em ? Channel.empty() : MM_BAYES_RESOLVER.out.density_model
+    mm_density_cv = params.skip_em ? Channel.empty() : MM_BAYES_RESOLVER.out.density_cv
     mm_realization_qc = params.skip_em ? Channel.empty() : MM_BAM_REALIZE.out.qc
+    mm_qc = params.skip_em ? Channel.empty() : MM_QC_MERGE.out.qc
+    mm_multiqc = params.skip_em ? Channel.empty() : MM_QC_MERGE.out.multiqc
     versions = ch_versions
 }

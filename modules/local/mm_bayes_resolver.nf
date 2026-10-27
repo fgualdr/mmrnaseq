@@ -20,6 +20,7 @@ process MM_BAYES_RESOLVER {
     tuple val(meta), path("*.resolution.tsv"), emit: resolution
     tuple val(meta), path("*.resolver_qc.tsv"), emit: qc
     tuple val(meta), path("*.density_model.tsv"), emit: density_model
+    tuple val(meta), path("*.density_cv.tsv"), emit: density_cv
     path 'versions.yml', emit: versions
 
     script:
@@ -38,7 +39,7 @@ process MM_BAYES_RESOLVER {
 
     pyver=\$(python3 -c 'import platform; print(platform.python_version())')
     npver=\$(python3 -c 'import numpy; print(numpy.__version__)')
-    printf '"%s":\n    resolver: "STAR-candidate Bayesian resolver Python v1"\n    python: "%s"\n    numpy: "%s"\n' \
+    printf '"%s":\n    resolver: "STAR-candidate Bayesian resolver Python v1 + PATCH05 density-CV diagnostics"\n    python: "%s"\n    numpy: "%s"\n' \
         '${task.process}' "\$pyver" "\$npver" > versions.yml
     """
 }

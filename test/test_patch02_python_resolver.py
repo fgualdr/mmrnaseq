@@ -70,6 +70,15 @@ def main() -> None:
 
         density = rows(d / "x.density_model.tsv")
         assert density and density[0]["orientation_group"] == "."
+        assert "knn_search_max" in density[0]
+        assert "knn_boundary_hit" in density[0]
+
+        density_cv = rows(d / "x.density_cv.tsv")
+        assert density_cv
+        assert sum(int(r["selected"]) for r in density_cv) == 1
+        assert sum(int(r["search_boundary"]) for r in density_cv) == 1
+        assert all(float(r["median_cv_radius_bp"]) >= 0 for r in density_cv)
+        assert all(float(r["p95_cv_radius_bp"]) >= float(r["median_cv_radius_bp"]) for r in density_cv)
 
         qc = {r["metric"]: r["value"] for r in rows(d / "x.resolver_qc.tsv")}
         assert qc["multimapper_fragments"] == "2"

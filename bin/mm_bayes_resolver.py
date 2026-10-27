@@ -244,8 +244,19 @@ def select_knn_mass(
     anchors: Dict[Tuple[str, str], AnchorIndex],
     genome_size: float,
     max_samples: int = 20_000,
-) -> None:
-    """Select orientation-specific weighted k by deterministic leave-one-out likelihood."""
+) -> List[Tuple[str, float, float, float, float, int, int, int]]:
+    """Select orientation-specific weighted k by deterministic leave-one-out likelihood.
+
+    The selected model is unchanged from PATCH 02P.  PATCH 05 additionally
+    returns the complete evaluated CV curve so boundary optima and the physical
+    genomic scale of each candidate k can be audited per sample/orientation.
+
+    Returned rows are:
+      orientation, k, cv_loglik, median_radius_bp, p95_radius_bp,
+      sampled_anchor_positions, selected, search_boundary.
+    """
+    cv_rows: List[Tuple[str, float, float, float, float, int, int, int]] = []
+
     for ori in sorted(models):
         model = models[ori]
         keys = [key for key in sorted(anchors) if key[1] == ori]
@@ -265,6 +276,7 @@ def select_knn_mass(
         if point_count == 0:
             model.k = ks[0]
             model.cv_score = float("-inf")
+            cv_rows.append((ori, ks[0], float("-inf"), 0.0, 0.0, 0, 1, 1))
             continue
 
         stride = max(1, point_count // max_samples)
@@ -284,9 +296,12 @@ def select_knn_mass(
 
         best_score = float("-inf")
         best_k = ks[0]
+        evaluated: List[Tuple[float, float, float, float, int]] = []
         for candidate_k in ks:
             score = 0.0
             wt = 0.0
+            radius_parts: List[np.ndarray] = []
+            n_sampled = 0
             for anchor, idx in samples:
                 x = anchor.positions[idx]
                 self_mass = anchor.prefix_mass[idx + 1] - anchor.prefix_mass[idx]
@@ -298,14 +313,35 @@ def select_knn_mass(
                 )
                 score += float(np.sum(self_mass * np.log(d)))
                 wt += float(np.sum(self_mass))
+                radius_parts.append(radius)
+                n_sampled += int(radius.size)
             if wt > 0:
                 score /= wt
+
+            if radius_parts:
+                radii = np.concatenate(radius_parts)
+                median_radius = float(np.median(radii))
+                p95_radius = float(np.quantile(radii, 0.95))
+            else:
+                median_radius = 0.0
+                p95_radius = 0.0
+
+            evaluated.append((candidate_k, score, median_radius, p95_radius, n_sampled))
             if score > best_score:
                 best_score = score
                 best_k = candidate_k
 
         model.k = best_k
         model.cv_score = best_score
+        search_max = max(ks)
+        for candidate_k, score, median_radius, p95_radius, n_sampled in evaluated:
+            cv_rows.append((
+                ori, candidate_k, score, median_radius, p95_radius, n_sampled,
+                1 if candidate_k == best_k else 0,
+                1 if candidate_k == search_max else 0,
+            ))
+
+    return cv_rows
 
 
 def parse_blocks_into_queries(
@@ -498,17 +534,44 @@ def fmt(x: float) -> str:
     return format(float(x), ".12g")
 
 
-def write_density_model(path: str, models: Dict[str, OrientationModel]) -> None:
+def write_density_model(
+    path: str,
+    models: Dict[str, OrientationModel],
+    cv_rows: Sequence[Tuple[str, float, float, float, float, int, int, int]],
+) -> None:
+    search_max = {}
+    for ori, k, *_rest in cv_rows:
+        search_max[ori] = max(search_max.get(ori, k), k)
+
     with open(path, "wt", encoding="utf-8") as out:
         out.write(
             "orientation_group\tunique_anchor_weight\tbackground_density_per_bp\tselected_knn_mass\t"
-            "knn_cv_loglik\tunique_normalized_as_median\tunique_normalized_as_mad\tabsolute_normalized_as_cutoff\n"
+            "knn_search_max\tknn_boundary_hit\tknn_cv_loglik\tunique_normalized_as_median\t"
+            "unique_normalized_as_mad\tabsolute_normalized_as_cutoff\n"
         )
         for ori in sorted(models):
             m = models[ori]
+            kmax = float(search_max.get(ori, m.k))
+            boundary = 1 if m.k == kmax else 0
             out.write(
-                f"{ori}\t{fmt(m.unique_weight)}\t{fmt(m.lambda0)}\t{fmt(m.k)}\t{fmt(m.cv_score)}\t"
-                f"{fmt(m.median_norm)}\t{fmt(m.mad)}\t{fmt(m.absolute_cutoff)}\n"
+                f"{ori}\t{fmt(m.unique_weight)}\t{fmt(m.lambda0)}\t{fmt(m.k)}\t{fmt(kmax)}\t{boundary}\t"
+                f"{fmt(m.cv_score)}\t{fmt(m.median_norm)}\t{fmt(m.mad)}\t{fmt(m.absolute_cutoff)}\n"
+            )
+
+
+def write_density_cv(
+    path: str,
+    cv_rows: Sequence[Tuple[str, float, float, float, float, int, int, int]],
+) -> None:
+    with open(path, "wt", encoding="utf-8") as out:
+        out.write(
+            "orientation_group\tcandidate_knn_mass\tknn_cv_loglik\tmedian_cv_radius_bp\t"
+            "p95_cv_radius_bp\tsampled_anchor_positions\tselected\tsearch_boundary\n"
+        )
+        for ori, k, score, median_radius, p95_radius, n_sampled, selected, boundary in cv_rows:
+            out.write(
+                f"{ori}\t{fmt(k)}\t{fmt(score)}\t{fmt(median_radius)}\t{fmt(p95_radius)}\t"
+                f"{n_sampled}\t{selected}\t{boundary}\n"
             )
 
 
@@ -532,7 +595,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     chrom_sizes, genome_size = read_chrom_sizes(args.chrom_sizes)
     models = robust_models_from_unique_fragments(args.unique_fragments, genome_size)
     anchors = load_anchor_indexes(args.anchors, chrom_sizes)
-    select_knn_mass(models, anchors, genome_size)
+    density_cv_rows = select_knn_mass(models, anchors, genome_size)
 
     prefix = args.output_prefix
     posterior_path = prefix + ".posterior_alignment.tsv"
@@ -638,7 +701,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 status = "RESOLVED" if resolved_mask[i] else "UNRESOLVED"
                 out.write(fields[0] + "\t" + status + "\t" + "\t".join(fields[1:]) + "\n")
 
-        write_density_model(prefix + ".density_model.tsv", models)
+        write_density_model(prefix + ".density_model.tsv", models, density_cv_rows)
+        write_density_cv(prefix + ".density_cv.tsv", density_cv_rows)
 
         nfrag = err.size
         ccount = np.frombuffer(cand_counts, dtype=np.uint32)
