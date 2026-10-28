@@ -251,9 +251,10 @@ class NfcoreTemplate {
     public static void summary(workflow, params, log, pass_mapped_reads=[:], pass_trimmed_reads=[:], pass_strand_check=[:]) {
         Map colors = logColours(params.monochrome_logs)
 
-        def fail_mapped_count  = pass_mapped_reads.count  { key, value -> value == false }
-        def fail_trimmed_count = pass_trimmed_reads.count { key, value -> value == false }
-        def fail_strand_count  = pass_strand_check.count  { key, value -> value == false }
+        def fail_mapped_count          = pass_mapped_reads.count  { key, value -> value == false }
+        def fail_trimmed_count         = pass_trimmed_reads.count { key, value -> value == false }
+        def fail_strand_count          = pass_strand_check.count  { key, value -> value == false }
+        def indeterminate_strand_count = pass_strand_check.count  { key, value -> value == 'INDETERMINATE' }
         if (workflow.success) {
             def color = colors.green
             def status = []
@@ -265,6 +266,10 @@ class NfcoreTemplate {
                 color = colors.yellow
                 status += ['with skipped sampl(es)']
             }
+            if (indeterminate_strand_count > 0) {
+                color = colors.yellow
+                status += ['with indeterminate strandedness QC']
+            }
             log.info "-${colors.purple}[$workflow.manifest.name]${color} Pipeline completed successfully ${status.join(', ')}${colors.reset}-"
             if (fail_trimmed_count > 0) {
                 log.info "-${colors.purple}[$workflow.manifest.name]${colors.red} Please check MultiQC report: ${fail_trimmed_count}/${pass_trimmed_reads.size()} samples skipped since they failed ${params.min_trimmed_reads} trimmed read threshold.${colors.reset}-"
@@ -274,6 +279,9 @@ class NfcoreTemplate {
             }
             if (fail_strand_count > 0) {
                 log.info "-${colors.purple}[$workflow.manifest.name]${colors.red} Please check MultiQC report: ${fail_strand_count}/${pass_strand_check.size()} samples failed strandedness check.${colors.reset}-"
+            }
+            if (indeterminate_strand_count > 0) {
+                log.info "-${colors.purple}[$workflow.manifest.name]${colors.yellow} Please check MultiQC Strandedness QC: ${indeterminate_strand_count}/${pass_strand_check.size()} samples had indeterminate RSeQC inference (for example zero usable reads). These samples were not called unstranded and were not skipped.${colors.reset}-"
             }
         } else {
             log.info "-${colors.purple}[$workflow.manifest.name]${colors.red} Pipeline completed with errors${colors.reset}-"

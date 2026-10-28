@@ -609,8 +609,11 @@ workflow RNASEQ {
     // Report all samples, including those that subsequently fail the quantitative
     // usability threshold. Counts are biological fragments; percentages use STAR
     // input fragments as denominator.
+    // IMPORTANT: Nextflow collect() flattens tuple emissions by default.
+    // Preserve one complete per-sample tuple per list element; otherwise the first
+    // element presented to rows.each below is the metadata map itself.
     ch_fragment_usability
-        .collect()
+        .collect(flat: false)
         .map { rows ->
             def tsv = [
                 '# id: mm_fragment_usability',
@@ -814,7 +817,7 @@ workflow RNASEQ {
     ch_junctionsaturation_multiqc = Channel.empty()
     ch_readdistribution_multiqc   = Channel.empty()
     ch_readduplication_multiqc    = Channel.empty()
-    ch_fail_strand_multiqc        = Channel.empty()
+    ch_strand_qc_multiqc          = Channel.empty()
     ch_tin_multiqc                = Channel.empty()
     
     if (!params.skip_alignment && !params.skip_qc) {
@@ -844,6 +847,7 @@ workflow RNASEQ {
             )
             ch_bamstat_multiqc            = BAM_RSEQC.out.bamstat_txt
             ch_inferexperiment_multiqc    = BAM_RSEQC.out.inferexperiment_txt
+            ch_inferexperiment_status     = BAM_RSEQC.out.inferexperiment_status
             ch_innerdistance_multiqc      = BAM_RSEQC.out.innerdistance_freq
             ch_junctionannotation_multiqc = BAM_RSEQC.out.junctionannotation_log
             ch_junctionsaturation_multiqc = BAM_RSEQC.out.junctionsaturation_rscript
@@ -852,30 +856,51 @@ workflow RNASEQ {
             ch_tin_multiqc                = BAM_RSEQC.out.tin_txt
             ch_versions = ch_versions.mix(BAM_RSEQC.out.versions)
 
-            ch_inferexperiment_multiqc
-                .map { 
-                    meta, strand_log ->
-                        def inferred_strand = WorkflowRnaseq.getInferexperimentStrandedness(strand_log, 30)
+            ch_inferexperiment_status
+                .map { meta, strand_status_file ->
+                    def status = WorkflowRnaseq.getRseqcStrandStatus(strand_status_file)
+                    def check  = status['Check']
+
+                    if (check == 'PASS') {
                         pass_strand_check[meta.id] = true
-                        if (meta.strandedness != inferred_strand[0]) {
-                            pass_strand_check[meta.id] = false
-                            return [ "$meta.id\t$meta.strandedness\t${inferred_strand.join('\t')}" ]
-                        }
+                    } else if (check == 'FAIL') {
+                        pass_strand_check[meta.id] = false
+                    } else {
+                        // Missing / invalid RSeQC inference is QC-indeterminate, not a
+                        // biological call of unstrandedness and not a sample failure.
+                        pass_strand_check[meta.id] = 'INDETERMINATE'
+                    }
+
+                    return [
+                        status['Sample'],
+                        status['Provided strandedness'],
+                        status['Inference status'],
+                        status['Check'],
+                        status['Inferred strandedness'],
+                        status['Sense (%)'],
+                        status['Antisense (%)'],
+                        status['Undetermined (%)'],
+                        status['Usable reads'],
+                        status['Reason']
+                    ].join('\t')
                 }
                 .collect()
-                .map { 
-                    tsv_data ->
-                        def header = [
-                            "Sample",
-                            "Provided strandedness",
-                            "Inferred strandedness",
-                            "Sense (%)",
-                            "Antisense (%)",
-                            "Undetermined (%)"
-                        ]
-                        WorkflowRnaseq.multiqcTsvFromList(tsv_data, header)
+                .map { tsv_data ->
+                    def header = [
+                        'Sample',
+                        'Provided strandedness',
+                        'Inference status',
+                        'Check',
+                        'Inferred strandedness',
+                        'Sense (%)',
+                        'Antisense (%)',
+                        'Undetermined (%)',
+                        'Usable reads',
+                        'Reason'
+                    ]
+                    WorkflowRnaseq.multiqcTsvFromList(tsv_data, header)
                 }
-                .set { ch_fail_strand_multiqc }
+                .set { ch_strand_qc_multiqc }
         }
     }
     //
@@ -904,7 +929,7 @@ workflow RNASEQ {
             ch_multiqc_logo.collect().ifEmpty([]),
             ch_fail_trimming_multiqc.collectFile(name: 'fail_trimmed_samples_mqc.tsv').ifEmpty([]),
             ch_fail_mapping_multiqc.collectFile(name: 'fail_mapped_samples_mqc.tsv').ifEmpty([]),
-            ch_fail_strand_multiqc.collectFile(name: 'fail_strand_check_mqc.tsv').ifEmpty([]),
+            ch_strand_qc_multiqc.collectFile(name: 'strand_qc_mqc.tsv').ifEmpty([]),
             ch_fragment_usability_multiqc.collectFile(name: 'mm_fragment_usability_mqc.tsv').ifEmpty([]),
             ch_mmresolver_multiqc.collect{it[1]}.ifEmpty([]),
             ch_mmdensity_multiqc.collect{it[1]}.ifEmpty([]),

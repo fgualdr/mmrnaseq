@@ -1,122 +1,247 @@
 #!/usr/bin/env perl
+use strict;
+use warnings;
 
-# Copyright (c) 2011 Erik Aronesty (erik@q32.com)
+# Robust GTF/GFF-to-BED12 converter for RSeQC.
 #
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
+# Historical versions of this pipeline used a small converter that switched its
+# attribute parser globally when it saw a ##gff-version header. Some valid GTF
+# files retain GFF-style header lines while using GTF transcript_id attributes;
+# that caused an empty BED12 file and consequently RSeQC to report zero usable
+# reads. This implementation parses attributes per record and supports both GTF
+# and GFF3 conventions.
 #
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
-#
-# ALSO, IT WOULD BE NICE IF YOU LET ME KNOW YOU USED IT.
+# With --fasta, the converter also validates the annotation contig namespace
+# against the exact reference FASTA and emits only compatible transcript models.
+# This logic intentionally lives in Perl so the minimal Perl process container
+# does not depend on comm/sort/cut/wc/head/tr being installed.
 
-use Getopt::Long;
+sub usage {
+    return "Usage: gtf2bed [--fasta reference.fa[.gz]] <annotation.gtf|gff[.gz]>\n";
+}
 
-my $extended;
-GetOptions("x"=>\$extended);
-
-$in = shift @ARGV;
-
-my $in_cmd =($in =~ /\.gz$/ ? "gunzip -c $in|" : $in =~ /\.zip$/ ? "unzip -p $in|" : "$in") || die "Can't open $in: $!\n";
-open IN, $in_cmd;
-
-while (<IN>) {
-    $gff = 2 if /^##gff-version 2/;
-    $gff = 3 if /^##gff-version 3/;
-    next if /^#/ && $gff;
-
-    s/\s+$//;
-    # 0-chr 1-src 2-feat 3-beg 4-end 5-scor 6-dir 7-fram 8-attr
-    my @f = split /\t/;
-    if ($gff) {
-        # most ver 2's stick gene names in the id field
-        ($id) = $f[8]=~ /\bID="([^"]+)"/;
-        # most ver 3's stick unquoted names in the name field
-        ($id) = $f[8]=~ /\bName=([^";]+)/ if !$id && $gff == 3;
+sub open_text {
+    my ($path) = @_;
+    my $fh;
+    if ($path =~ /\.gz$/i) {
+        open($fh, '-|', 'gzip', '-dc', $path) or die "Cannot read $path: $!\n";
     } else {
-        ($id) = $f[8]=~ /transcript_id "([^"]+)"/;
+        open($fh, '<', $path) or die "Cannot read $path: $!\n";
     }
+    return $fh;
+}
 
-    next unless $id && $f[0];
-
-    if ($f[2] eq 'exon') {
-        die "no position at exon on line $." if ! $f[3];
-        # gff3 puts :\d in exons sometimes
-        $id =~ s/:\d+$// if $gff == 3;
-        push @{$exons{$id}}, \@f;
-        # save lowest start
-        $trans{$id} = \@f if !$trans{$id};
-    } elsif ($f[2] eq 'start_codon') {
-        #optional, output codon start/stop as "thick" region in bed
-        $sc{$id}->[0] = $f[3];
-    } elsif ($f[2] eq 'stop_codon') {
-        $sc{$id}->[1] = $f[4];
-    } elsif ($f[2] eq 'miRNA' ) {
-        $trans{$id} = \@f if !$trans{$id};
-        push @{$exons{$id}}, \@f;
+my $fasta;
+while (@ARGV && $ARGV[0] =~ /^--/) {
+    my $opt = shift @ARGV;
+    if ($opt eq '--fasta') {
+        @ARGV or die usage();
+        $fasta = shift @ARGV;
+    } elsif ($opt eq '--help' || $opt eq '-h') {
+        print usage();
+        exit 0;
+    } else {
+        die "Unknown option: $opt\n" . usage();
     }
 }
 
-for $id (
-    # sort by chr then pos
-    sort {
-        $trans{$a}->[0] eq $trans{$b}->[0] ?
-        $trans{$a}->[3] <=> $trans{$b}->[3] :
-        $trans{$a}->[0] cmp $trans{$b}->[0]
-    } (keys(%trans)) ) {
-        my ($chr, undef, undef, undef, undef, undef, $dir, undef, $attr, undef, $cds, $cde) = @{$trans{$id}};
-        my ($cds, $cde);
-        ($cds, $cde) = @{$sc{$id}} if $sc{$id};
+my $input = shift @ARGV or die usage();
+die usage() if @ARGV;
 
-        # sort by pos
-        my @ex = sort {
-            $a->[3] <=> $b->[3]
-        } @{$exons{$id}};
-
-        my $beg = $ex[0][3];
-        my $end = $ex[-1][4];
-
-        if ($dir eq '-') {
-            # swap
-            $tmp=$cds;
-            $cds=$cde;
-            $cde=$tmp;
-            $cds -= 2 if $cds;
-            $cde += 2 if $cde;
-        }
-
-        # not specified, just use exons
-        $cds = $beg if !$cds;
-        $cde = $end if !$cde;
-
-        # adjust start for bed
-        --$beg; --$cds;
-
-        my $exn = @ex;												# exon count
-        my $exst = join ",", map {$_->[3]-$beg-1} @ex;				# exon start
-        my $exsz = join ",", map {$_->[4]-$_->[3]+1} @ex;			# exon size
-
-        my $gene_id;
-        my $extend = "";
-        if ($extended) {
-            ($gene_id) = $attr =~ /gene_name "([^"]+)"/;
-            ($gene_id) = $attr =~ /gene_id "([^"]+)"/ unless $gene_id;
-            $extend="\t$gene_id";
-        }
-        # added an extra comma to make it look exactly like ucsc's beds
-        print "$chr\t$beg\t$end\t$id\t0\t$dir\t$cds\t$cde\t0\t$exn\t$exsz,\t$exst,$extend\n";
+my %fasta_contig;
+if (defined $fasta) {
+    my $ffh = open_text($fasta);
+    while (my $line = <$ffh>) {
+        next unless $line =~ /^>(\S+)/;
+        $fasta_contig{$1} = 1;
+    }
+    close $ffh;
+    die "gtf2bed: reference FASTA contains no sequence records: $fasta\n"
+        unless keys %fasta_contig;
 }
 
-close IN;
+my $fh = open_text($input);
+
+my %tx;
+my $line_no = 0;
+my $exon_rows = 0;
+my $rows_without_tx = 0;
+my $rows_bad_coord = 0;
+my $rows_bad_strand = 0;
+
+sub parse_attrs {
+    my ($text) = @_;
+    my %a;
+
+    # GTF: key "value"; key2 "value2";
+    while ($text =~ /(?:^|;\s*)\s*([^\s;=]+)\s+"([^"]*)"/g) {
+        $a{$1} = $2 if !exists $a{$1};
+    }
+
+    # GFF3: key=value;key2=value2
+    for my $item (split /;/, $text) {
+        $item =~ s/^\s+|\s+$//g;
+        next unless length $item;
+        if ($item =~ /^([^=\s]+)=(.*)$/) {
+            my ($k, $v) = ($1, $2);
+            $v =~ s/^"|"$//g;
+            $a{$k} = $v if !exists $a{$k};
+        }
+    }
+    return %a;
+}
+
+sub clean_parent_id {
+    my ($id) = @_;
+    $id =~ s/^\s+|\s+$//g;
+    $id =~ s/^(?:transcript|mRNA|rna)://i;
+    return $id;
+}
+
+while (my $line = <$fh>) {
+    $line_no++;
+    next if $line =~ /^\s*#/;
+    chomp $line;
+    next unless length $line;
+
+    my @f = split /\t/, $line, 9;
+    next unless @f == 9;
+    my ($chrom, undef, $feature, $start, $end, undef, $strand, undef, $attr_text) = @f;
+
+    next unless $feature eq 'exon' || $feature eq 'miRNA';
+    $exon_rows++;
+
+    unless ($start =~ /^\d+$/ && $end =~ /^\d+$/ && $start >= 1 && $end >= $start) {
+        $rows_bad_coord++;
+        next;
+    }
+    unless ($strand eq '+' || $strand eq '-') {
+        $rows_bad_strand++;
+        next;
+    }
+
+    my %a = parse_attrs($attr_text);
+    my @ids;
+    if (defined $a{'transcript_id'} && length $a{'transcript_id'}) {
+        @ids = ($a{'transcript_id'});
+    } elsif (defined $a{'transcriptId'} && length $a{'transcriptId'}) {
+        @ids = ($a{'transcriptId'});
+    } elsif (defined $a{'Parent'} && length $a{'Parent'}) {
+        @ids = map { clean_parent_id($_) } split /,/, $a{'Parent'};
+    } elsif (defined $a{'transcript'} && length $a{'transcript'}) {
+        @ids = ($a{'transcript'});
+    }
+
+    @ids = grep { defined $_ && length $_ } @ids;
+    unless (@ids) {
+        $rows_without_tx++;
+        next;
+    }
+
+    for my $id (@ids) {
+        my $entry = $tx{$id};
+        if (!$entry) {
+            $tx{$id} = {
+                chrom  => $chrom,
+                strand => $strand,
+                exons  => [],
+            };
+            $entry = $tx{$id};
+        }
+
+        # A transcript ID spanning chromosomes/strands is malformed for BED12.
+        next if $entry->{chrom} ne $chrom || $entry->{strand} ne $strand;
+        push @{$entry->{exons}}, [$start + 0, $end + 0];
+    }
+}
+close $fh;
+
+my @records;
+for my $id (keys %tx) {
+    my $entry = $tx{$id};
+    my %seen;
+    my @exons = sort {
+        $a->[0] <=> $b->[0] || $a->[1] <=> $b->[1]
+    } grep {
+        my $k = $_->[0] . ':' . $_->[1];
+        !$seen{$k}++
+    } @{$entry->{exons}};
+    next unless @exons;
+
+    my $chrom = $entry->{chrom};
+    my $strand = $entry->{strand};
+    my $start0 = $exons[0]->[0] - 1;
+    my $end1 = $exons[-1]->[1];
+    my @sizes  = map { $_->[1] - $_->[0] + 1 } @exons;
+    my @starts = map { $_->[0] - 1 - $start0 } @exons;
+
+    my $safe_id = $id;
+    $safe_id =~ s/[\t\r\n ]+/_/g;
+
+    push @records, [
+        $chrom,
+        $start0,
+        $end1,
+        $safe_id,
+        0,
+        $strand,
+        $start0,
+        $end1,
+        0,
+        scalar(@exons),
+        join(',', @sizes) . ',',
+        join(',', @starts) . ',',
+    ];
+}
+
+@records = sort {
+    $a->[0] cmp $b->[0] ||
+    $a->[1] <=> $b->[1] ||
+    $a->[2] <=> $b->[2] ||
+    $a->[3] cmp $b->[3]
+} @records;
+
+if (!@records) {
+    die "gtf2bed: produced 0 BED12 transcripts from $input " .
+        "(exon_rows=$exon_rows, missing_transcript_id=$rows_without_tx, " .
+        "bad_coordinates=$rows_bad_coord, bad_strand=$rows_bad_strand). " .
+        "RSeQC requires stranded exon models with transcript_id (GTF) or Parent (GFF3).\n";
+}
+
+my $unfiltered_n = scalar(@records);
+my %bed_contig = map { $_->[0] => 1 } @records;
+
+if (defined $fasta) {
+    my %compatible;
+    for my $c (keys %bed_contig) {
+        $compatible{$c} = 1 if exists $fasta_contig{$c};
+    }
+
+    if (!keys %compatible) {
+        my @fasta_examples = (sort keys %fasta_contig)[0 .. ((keys(%fasta_contig) < 5) ? keys(%fasta_contig)-1 : 4)];
+        my @bed_examples   = (sort keys %bed_contig)[0 .. ((keys(%bed_contig) < 5) ? keys(%bed_contig)-1 : 4)];
+        die "gtf2bed: RSeQC BED12 and reference FASTA have zero contig-name overlap. " .
+            "FASTA contigs=" . scalar(keys %fasta_contig) . "; BED contigs=" . scalar(keys %bed_contig) . ". " .
+            "Example FASTA contigs=[" . join(',', @fasta_examples) . "]; " .
+            "Example BED contigs=[" . join(',', @bed_examples) . "]. " .
+            "Fix the GTF/GFF contig namespace (or provide a compatible --gene_bed); " .
+            "do not infer strandedness from an incompatible annotation.\n";
+    }
+
+    @records = grep { exists $compatible{$_->[0]} } @records;
+    die "gtf2bed: compatibility filtering removed every transcript model unexpectedly\n"
+        unless @records;
+
+    print STDERR "gtf2bed: reference compatibility kept " . scalar(@records) .
+        " / $unfiltered_n transcript models on " . scalar(keys %compatible) .
+        " compatible contigs (fasta_contigs=" . scalar(keys %fasta_contig) .
+        ", bed_contigs=" . scalar(keys %bed_contig) . ")\n";
+}
+
+for my $rec (@records) {
+    print join("\t", @$rec), "\n";
+}
+
+print STDERR "gtf2bed: wrote " . scalar(@records) . " BED12 transcript models from " .
+    "$exon_rows exon/miRNA records; skipped missing_transcript_id=$rows_without_tx, " .
+    "bad_coordinates=$rows_bad_coord, bad_strand=$rows_bad_strand\n";

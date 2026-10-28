@@ -1,0 +1,208 @@
+Oct-28 16:00:40.289 [main] DEBUG nextflow.cli.Launcher - $> nextflow -c conf/ieo.slurm.config,conf/mmref.config,conf/mmref.smoke.config run mmref.nf --fasta test/data/mmref_smoke.fa --mmref_name PATCH08_SMOKE --outdir /beegfs/scratch/ieo5244/mmref_patch08_smoke_results --mmref_run_reprise false --mm_reprise_polish false -w /beegfs/scratch/ieo5244/mmref_patch08_smoke_work -resume
+Oct-28 16:00:40.688 [main] DEBUG nextflow.cli.CmdRun - N E X T F L O W  ~  version 25.10.8
+Oct-28 16:00:40.705 [main] DEBUG nextflow.plugin.PluginsFacade - Setting up plugin manager > mode=prod; embedded=false; plugins-dir=/hpcnfs/home/ieo5244/.nextflow/plugins; core-plugins: nf-amazon@3.4.6,nf-azure@1.20.3,nf-cloudcache@0.5.0,nf-codecommit@0.5.0,nf-console@1.3.0,nf-google@1.23.6,nf-k8s@1.2.2,nf-tower@1.17.7,nf-wave@1.16.1
+Oct-28 16:00:40.801 [main] INFO  o.pf4j.DefaultPluginStatusProvider - Enabled plugins: []
+Oct-28 16:00:40.803 [main] INFO  o.pf4j.DefaultPluginStatusProvider - Disabled plugins: []
+Oct-28 16:00:40.806 [main] INFO  org.pf4j.DefaultPluginManager - PF4J version 3.12.0 in 'deployment' mode
+Oct-28 16:00:40.818 [main] DEBUG nextflow.util.RetryConfig - Missing nextflow session - using default retry config
+Oct-28 16:00:41.035 [main] INFO  org.pf4j.AbstractPluginManager - No plugins
+Oct-28 16:00:41.142 [main] DEBUG nextflow.config.ConfigBuilder - Found config local: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/nextflow.config
+Oct-28 16:00:41.190 [main] DEBUG nextflow.config.ConfigBuilder - User config file: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/conf/ieo.slurm.config
+Oct-28 16:00:41.191 [main] DEBUG nextflow.config.ConfigBuilder - User config file: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/conf/mmref.config
+Oct-28 16:00:41.191 [main] DEBUG nextflow.config.ConfigBuilder - User config file: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/conf/mmref.smoke.config
+Oct-28 16:00:41.192 [main] DEBUG nextflow.config.ConfigBuilder - Parsing config file: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/nextflow.config
+Oct-28 16:00:41.193 [main] DEBUG nextflow.config.ConfigBuilder - Parsing config file: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/conf/ieo.slurm.config
+Oct-28 16:00:41.193 [main] DEBUG nextflow.config.ConfigBuilder - Parsing config file: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/conf/mmref.config
+Oct-28 16:00:41.193 [main] DEBUG nextflow.config.ConfigBuilder - Parsing config file: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/conf/mmref.smoke.config
+Oct-28 16:00:41.214 [main] DEBUG nextflow.config.ConfigBuilder - Applying config profile: `standard`
+Oct-28 16:00:48.299 [main] DEBUG nextflow.config.ConfigBuilder - Applying config profile: `standard`
+Oct-28 16:00:48.607 [main] DEBUG nextflow.config.ConfigBuilder - Applying config profile: `standard`
+Oct-28 16:00:48.702 [main] DEBUG nextflow.config.ConfigBuilder - Applying config profile: `standard`
+Oct-28 16:00:49.000 [main] DEBUG nextflow.plugin.PluginsFacade - Plugins declared=[nf-boost@0.7.0]
+Oct-28 16:00:49.000 [main] DEBUG nextflow.plugin.PluginsFacade - Plugins default=[]
+Oct-28 16:00:49.000 [main] DEBUG nextflow.plugin.PluginsFacade - Plugins resolved requirement=[nf-boost@0.7.0]
+Oct-28 16:00:49.568 [main] DEBUG n.plugin.HttpPluginRepository - Registry request: https://registry.nextflow.io/api/v1/plugins/dependencies?plugins=nf-boost%400.7.0&nextflowVersion=25.10.8
+- code: 200
+- body: {"plugins":[{"id":"nf-boost","releases":[{"version":"0.7.0","url":"https://registry.nextflow.io/api/v1/plugins/nf-boost/0.7.0/download/nf-boost-0.7.0.zip","date":"2025-12-30T18:44:05.846095Z","sha512sum":"0b64abb23c90a8b925aea28d434264c010e8df68b4446c46238ac5acd97adce912295af595e782c3e6371aead638a2c51c151fb9994f263f78d1485adfd34e3f","requires":">=25.10.0","dependsOn":[],"status":"PUBLISHED"}],"projectUrl":"https://github.com/bentsherman/nf-boost","provider":"nextflow"}]}
+Oct-28 16:00:49.777 [main] DEBUG nextflow.plugin.PluginUpdater - Installing plugin nf-boost version: 0.7.0
+Oct-28 16:00:49.847 [main] INFO  org.pf4j.AbstractPluginManager - Plugin 'nf-boost@0.7.0' resolved
+Oct-28 16:00:49.847 [main] INFO  org.pf4j.AbstractPluginManager - Start plugin 'nf-boost@0.7.0'
+Oct-28 16:00:49.869 [main] DEBUG nextflow.plugin.BasePlugin - Plugin started nf-boost@0.7.0
+Oct-28 16:00:49.886 [main] DEBUG n.secret.LocalSecretsProvider - Secrets store: /hpcnfs/home/ieo5244/.nextflow/secrets/store.json
+Oct-28 16:00:49.887 [main] DEBUG nextflow.secret.SecretsLoader - Discovered secrets providers: [nextflow.secret.LocalSecretsProvider@7ac685ef] - activable => nextflow.secret.LocalSecretsProvider@7ac685ef
+Oct-28 16:00:49.889 [main] DEBUG nextflow.cli.CmdRun - Applied DSL=2 from script declaration
+Oct-28 16:00:50.019 [main] DEBUG nextflow.cli.CmdRun - Launching `mmref.nf` [wise_mestorf] DSL2 - revision: 1becdfa94e
+Oct-28 16:00:50.385 [main] DEBUG nextflow.Session - Session UUID: 184d0977-7894-4ebb-b1b9-0c4b41658da0
+Oct-28 16:00:50.385 [main] DEBUG nextflow.Session - Run name: wise_mestorf
+Oct-28 16:00:50.385 [main] DEBUG nextflow.Session - Executor pool size: 16
+Oct-28 16:00:50.406 [main] DEBUG nextflow.file.FilePorter - File porter settings maxRetries=3; maxTransfers=50; pollTimeout=null
+Oct-28 16:00:50.436 [main] DEBUG nextflow.util.ThreadPoolBuilder - Creating thread pool 'FileTransfer' minSize=10; maxSize=48; workQueue=LinkedBlockingQueue[-1]; allowCoreThreadTimeout=false
+Oct-28 16:00:50.656 [main] DEBUG nextflow.cli.CmdRun - 
+  Version: 25.10.8 build 13767
+  Created: 29-09-2026 16:07 UTC (18:07 CEST)
+  System: Linux 5.14.0-503.23.2.el9_5.x86_64
+  Runtime: Groovy 4.0.28 on OpenJDK 64-Bit Server VM 17.0.10+7
+  Encoding: UTF-8 (UTF-8)
+  Process: 1907414@login01 [10.200.146.14]
+  CPUs: 16 - Mem: 62.3 GB (2.1 GB) - Swap: 0 (0)
+Oct-28 16:00:50.765 [main] DEBUG nextflow.Session - Work-dir: /beegfs/scratch/ieo5244/mmref_patch08_smoke_work [fhgfs]
+Oct-28 16:00:50.887 [main] DEBUG nextflow.executor.ExecutorFactory - Extension executors providers=[]
+Oct-28 16:00:50.948 [main] DEBUG nextflow.Session - Observer factory (v2): LinObserverFactory
+Oct-28 16:00:50.962 [main] DEBUG nextflow.Session - Observer factory (v2): DefaultObserverFactory
+Oct-28 16:00:50.995 [main] DEBUG nextflow.Session - Observer factory: BoostObserverFactory
+Oct-28 16:00:51.054 [main] DEBUG nextflow.cache.CacheFactory - Using Nextflow cache factory: nextflow.cache.DefaultCacheFactory
+Oct-28 16:00:51.109 [main] DEBUG nextflow.util.CustomThreadPool - Creating default thread pool > poolSize: 17; maxThreads: 1000
+Oct-28 16:00:51.593 [main] DEBUG nextflow.Session - Session start
+Oct-28 16:00:51.601 [main] DEBUG nextflow.trace.TraceFileObserver - Workflow started -- trace file: trace.txt
+Oct-28 16:00:51.612 [main] DEBUG nextflow.Session - Using default localLib path: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/lib
+Oct-28 16:00:51.686 [main] DEBUG nextflow.Session - Adding to the classpath library: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/lib
+Oct-28 16:00:51.687 [main] DEBUG nextflow.Session - Adding to the classpath library: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/lib/nfcore_external_java_deps.jar
+Oct-28 16:00:52.309 [main] DEBUG nextflow.script.ScriptRunner - > Launching execution
+Oct-28 16:00:55.104 [main] DEBUG n.script.dsl.ProcessConfigBuilder - Config settings `withLabel:process_low` matches labels `process_low` for process with name MMREF_DISCOVERY:MMREF_PREP_REFERENCE
+Oct-28 16:00:55.108 [main] DEBUG n.script.dsl.ProcessConfigBuilder - Config settings `withName:MMREF_PREP_REFERENCE` matches process MMREF_DISCOVERY:MMREF_PREP_REFERENCE
+Oct-28 16:00:55.191 [main] DEBUG nextflow.executor.ExecutorFactory - << taskConfig executor: slurm
+Oct-28 16:00:55.191 [main] DEBUG nextflow.executor.ExecutorFactory - >> processorType: 'slurm'
+Oct-28 16:00:55.203 [main] DEBUG nextflow.executor.Executor - [warm up] executor > slurm
+Oct-28 16:00:55.291 [main] DEBUG n.processor.TaskPollingMonitor - Creating task monitor for executor 'slurm' > capacity: 5; pollInterval: 3m; dumpInterval: 5m 
+Oct-28 16:00:55.306 [main] DEBUG n.processor.TaskPollingMonitor - >>> barrier register (monitor: slurm)
+Oct-28 16:00:55.307 [main] DEBUG n.processor.TaskPollingMonitor - Creating submit rate limit of 5 submissions per 60 seconds
+Oct-28 16:00:55.311 [main] DEBUG n.executor.AbstractGridExecutor - Creating executor 'slurm' > queue-stat-interval: 1m
+Oct-28 16:00:55.400 [main] DEBUG nextflow.processor.TaskProcessor - Creating process 'MMREF_DISCOVERY:MMREF_PREP_REFERENCE': maxForks=0; fair=false; array=0
+Oct-28 16:00:55.608 [main] DEBUG n.script.dsl.ProcessConfigBuilder - Config settings `withLabel:process_high_memory` matches labels `process_high_memory` for process with name MMREF_DISCOVERY:MMREF_MUMMER_SELF
+Oct-28 16:00:55.611 [main] DEBUG n.script.dsl.ProcessConfigBuilder - Config settings `withName:MMREF_MUMMER_SELF` matches process MMREF_DISCOVERY:MMREF_MUMMER_SELF
+Oct-28 16:00:55.688 [main] DEBUG nextflow.executor.ExecutorFactory - << taskConfig executor: slurm
+Oct-28 16:00:55.688 [main] DEBUG nextflow.executor.ExecutorFactory - >> processorType: 'slurm'
+Oct-28 16:00:55.689 [main] DEBUG nextflow.processor.TaskProcessor - Creating process 'MMREF_DISCOVERY:MMREF_MUMMER_SELF': maxForks=0; fair=false; array=0
+Oct-28 16:00:55.694 [main] DEBUG n.script.dsl.ProcessConfigBuilder - Config settings `withLabel:process_high_memory` matches labels `process_high_memory` for process with name MMREF_DISCOVERY:MMREF_REPRISE
+Oct-28 16:00:55.696 [main] DEBUG n.script.dsl.ProcessConfigBuilder - Config settings `withName:MMREF_REPRISE` matches process MMREF_DISCOVERY:MMREF_REPRISE
+Oct-28 16:00:55.699 [main] DEBUG nextflow.executor.ExecutorFactory - << taskConfig executor: slurm
+Oct-28 16:00:55.699 [main] DEBUG nextflow.executor.ExecutorFactory - >> processorType: 'slurm'
+Oct-28 16:00:55.699 [main] DEBUG nextflow.processor.TaskProcessor - Creating process 'MMREF_DISCOVERY:MMREF_REPRISE': maxForks=0; fair=false; array=0
+Oct-28 16:00:55.705 [main] DEBUG n.script.dsl.ProcessConfigBuilder - Config settings `withLabel:process_single` matches labels `process_single` for process with name MMREF_DISCOVERY:MMREF_TRF
+Oct-28 16:00:55.788 [main] DEBUG n.script.dsl.ProcessConfigBuilder - Config settings `withName:MMREF_TRF` matches process MMREF_DISCOVERY:MMREF_TRF
+Oct-28 16:00:55.791 [main] DEBUG nextflow.executor.ExecutorFactory - << taskConfig executor: slurm
+Oct-28 16:00:55.791 [main] DEBUG nextflow.executor.ExecutorFactory - >> processorType: 'slurm'
+Oct-28 16:00:55.792 [main] DEBUG nextflow.processor.TaskProcessor - Creating process 'MMREF_DISCOVERY:MMREF_TRF': maxForks=0; fair=false; array=0
+Oct-28 16:00:55.796 [main] DEBUG n.script.dsl.ProcessConfigBuilder - Config settings `withLabel:process_medium` matches labels `process_medium` for process with name MMREF_DISCOVERY:MMREF_CDHIT
+Oct-28 16:00:55.797 [main] DEBUG n.script.dsl.ProcessConfigBuilder - Config settings `withName:MMREF_CDHIT` matches process MMREF_DISCOVERY:MMREF_CDHIT
+Oct-28 16:00:55.799 [main] DEBUG nextflow.executor.ExecutorFactory - << taskConfig executor: slurm
+Oct-28 16:00:55.800 [main] DEBUG nextflow.executor.ExecutorFactory - >> processorType: 'slurm'
+Oct-28 16:00:55.800 [main] DEBUG nextflow.processor.TaskProcessor - Creating process 'MMREF_DISCOVERY:MMREF_CDHIT': maxForks=0; fair=false; array=0
+Oct-28 16:00:55.804 [main] DEBUG nextflow.Session - Workflow process names [dsl2]: MMREF_PREP_REFERENCE, MMREF_DISCOVERY:MMREF_REPRISE, MMREF_DISCOVERY:MMREF_TRF, MMREF_DISCOVERY:MMREF_MUMMER_SELF, MMREF_CDHIT, MMREF_TRF, MMREF_MUMMER_SELF, MMREF_DISCOVERY:MMREF_PREP_REFERENCE, MMREF_DISCOVERY:MMREF_CDHIT, MMREF_REPRISE
+Oct-28 16:00:56.091 [main] WARN  nextflow.Session - There's no process matching config selector: CUSTOM_DUMPSOFTWAREVERSIONS
+Oct-28 16:00:56.093 [main] WARN  nextflow.Session - There's no process matching config selector: SAMPLESHEET_CHECK
+Oct-28 16:00:56.093 [main] WARN  nextflow.Session - There's no process matching config selector: SRX_DOWNLOAD
+Oct-28 16:00:56.093 [main] WARN  nextflow.Session - There's no process matching config selector: GUNZIP_.*|GTF_TO_TRANSCRIPT_FASTA
+Oct-28 16:00:56.093 [main] WARN  nextflow.Session - There's no process matching config selector: UNTAR_.*
+Oct-28 16:00:56.093 [main] WARN  nextflow.Session - There's no process matching config selector: UNTAR_.*|STAR_GENOMEGENERATE|STAR_GENOMEGENERATE_IGENOMES
+Oct-28 16:00:56.093 [main] WARN  nextflow.Session - There's no process matching config selector: SRX_DOWNLOAD|FASTQ_FROM_SRA
+Oct-28 16:00:56.093 [main] WARN  nextflow.Session - There's no process matching config selector: GFFREAD
+Oct-28 16:00:56.093 [main] WARN  nextflow.Session - There's no process matching config selector: SALMON_INDEX
+Oct-28 16:00:56.093 [main] WARN  nextflow.Session - There's no process matching config selector: GTF2BED
+Oct-28 16:00:56.093 [main] WARN  nextflow.Session - There's no process matching config selector: CAT_ADDITIONAL_FASTA|PREPROCESS_TRANSCRIPTS_FASTA_GENCODE
+Oct-28 16:00:56.093 [main] WARN  nextflow.Session - There's no process matching config selector: GTF_GENE_FILTER
+Oct-28 16:00:56.093 [main] WARN  nextflow.Session - There's no process matching config selector: CUSTOM_GETCHROMSIZES
+Oct-28 16:00:56.093 [main] WARN  nextflow.Session - There's no process matching config selector: CAT_FASTQ
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: FQ_SUBSAMPLE
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:FASTQ_SUBSAMPLE_FQ_SALMON:SALMON_QUANT
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:FASTQ_FASTQC_UMITOOLS_FASTP:FASTQC_RAW
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:FASTQ_FASTQC_UMITOOLS_FASTP:FASTQC_TRIM
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:FASTQ_FASTQC_UMITOOLS_FASTP:FASTP
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:ALIGN_STAR:BAM_SORT_STATS_SAMTOOLS:.*
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:ALIGN_STAR:BAM_SORT_STATS_SAMTOOLS:SAMTOOLS_SORT
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:ALIGN_STAR:BAM_SORT_STATS_SAMTOOLS:SAMTOOLS_INDEX
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_FILTER_EM:BAM_FILTER
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_FILTER_EM:MM_CANDIDATE_PREP
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_FILTER_EM:MM_BAYES_RESOLVER
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_FILTER_EM:MM_BAM_REALIZE
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_FILTER_EM:MM_QC_MERGE
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_SORT_STATS_SAMTOOLS_BAM:SAMTOOLS_SORT
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_SORT_STATS_SAMTOOLS_BAM:SAMTOOLS_INDEX
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_SORT_STATS_SAMTOOLS_BAM:BAM_STATS_SAMTOOLS:.*
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_SORT_STATS_SAMTOOLS_MM_FULL:SAMTOOLS_SORT
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_SORT_STATS_SAMTOOLS_MM_FULL:SAMTOOLS_INDEX
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_SORT_STATS_SAMTOOLS_MM_FULL:BAM_STATS_SAMTOOLS:.*
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF:SAMTOOLS_SORT
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF:SAMTOOLS_INDEX
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF:BAM_STATS_SAMTOOLS:.*
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:ALIGN_STAR:STAR_ALIGN|.*:ALIGN_STAR:STAR_ALIGN_IGENOMES
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:QUANTIFY_SALMON:SALMON_QUANT
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:QUANTIFY_SALMON:SALMON_TX2GENE
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:QUANTIFY_SALMON:SALMON_TXIMPORT
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: .*:QUANTIFY_SALMON:SALMON_SE_.*
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: INTRON_EXON_COUNT
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: DESEQ2_QC_STAR_SALMON
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: NORMALIZE_COUNTS_INTRON_EXON
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: QUALIMAP_RNASEQ
+Oct-28 16:00:56.094 [main] WARN  nextflow.Session - There's no process matching config selector: DUPRADAR
+Oct-28 16:00:56.095 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_RSEQC:RSEQC_BAMSTAT
+Oct-28 16:00:56.095 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_RSEQC:RSEQC_INFEREXPERIMENT
+Oct-28 16:00:56.095 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_RSEQC:RSEQC_JUNCTIONANNOTATION
+Oct-28 16:00:56.095 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_RSEQC:RSEQC_JUNCTIONSATURATION
+Oct-28 16:00:56.095 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_RSEQC:RSEQC_READDUPLICATION
+Oct-28 16:00:56.095 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_RSEQC:RSEQC_READDISTRIBUTION
+Oct-28 16:00:56.095 [main] WARN  nextflow.Session - There's no process matching config selector: .*:BAM_RSEQC:RSEQC_INNERDISTANCE
+Oct-28 16:00:56.095 [main] WARN  nextflow.Session - There's no process matching config selector: MULTIQC
+Oct-28 16:00:56.095 [main] WARN  nextflow.Session - There's no process matching config selector: NFCORE_RNASEQ:RNASEQ:FASTQ_FROM_SRA:SRX_DOWNLOAD.*
+Oct-28 16:00:56.096 [main] DEBUG nextflow.Session - Igniting dataflow network (11)
+Oct-28 16:00:56.097 [main] DEBUG nextflow.processor.TaskProcessor - Starting process > MMREF_DISCOVERY:MMREF_PREP_REFERENCE
+Oct-28 16:00:56.097 [main] DEBUG nextflow.processor.TaskProcessor - Starting process > MMREF_DISCOVERY:MMREF_MUMMER_SELF
+Oct-28 16:00:56.098 [main] DEBUG nextflow.processor.TaskProcessor - Starting process > MMREF_DISCOVERY:MMREF_REPRISE
+Oct-28 16:00:56.098 [main] DEBUG nextflow.processor.TaskProcessor - Starting process > MMREF_DISCOVERY:MMREF_TRF
+Oct-28 16:00:56.098 [main] DEBUG nextflow.processor.TaskProcessor - Starting process > MMREF_DISCOVERY:MMREF_CDHIT
+Oct-28 16:00:56.099 [main] DEBUG nextflow.script.ScriptRunner - Parsed script files:
+  Script_ef9ae36e3fb47c08: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/modules/local/mmref_mummer_self.nf
+  Script_3eef593df570903d: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/modules/local/mmref_reprise.nf
+  Script_a80e0199de5f58f8: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/modules/local/mmref_prepare_reference.nf
+  Script_d0c78e643d42829e: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/modules/local/mmref_trf.nf
+  Script_698193ac01cdbaf6: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/mmref.nf
+  Script_8867e54a1f3e8ab3: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/workflows/mmref_discovery.nf
+  Script_aafcfddb2ff21408: /hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/modules/local/mmref_cdhit.nf
+Oct-28 16:00:56.099 [main] DEBUG nextflow.script.ScriptRunner - > Awaiting termination 
+Oct-28 16:00:56.099 [main] DEBUG nextflow.Session - Session await
+Oct-28 16:00:56.397 [Actor Thread 10] INFO  nextflow.container.SingularityCache - Pulling Singularity image docker://docker.io/fgualdr/mmref-seqkit@sha256:90804cc6ff8a96bddf67c3310215c2a7d3ee01e18db0492f2103eb63813d596b [cache /hpcnfs/data/GN2/fgualdrini/tools/nf-cachedir/docker.io-fgualdr-mmref-seqkit@sha256-90804cc6ff8a96bddf67c3310215c2a7d3ee01e18db0492f2103eb63813d596b.img]
+Oct-28 16:00:58.809 [Actor Thread 10] DEBUG nextflow.container.SingularityCache - Singularity pull complete image=docker://docker.io/fgualdr/mmref-seqkit@sha256:90804cc6ff8a96bddf67c3310215c2a7d3ee01e18db0492f2103eb63813d596b path=/hpcnfs/data/GN2/fgualdrini/tools/nf-cachedir/docker.io-fgualdr-mmref-seqkit@sha256-90804cc6ff8a96bddf67c3310215c2a7d3ee01e18db0492f2103eb63813d596b.img
+Oct-28 16:00:59.017 [Task submitter] DEBUG nextflow.executor.GridTaskHandler - [SLURM] submitted process MMREF_DISCOVERY:MMREF_PREP_REFERENCE (PATCH08_SMOKE) > jobId: 8440025; workDir: /beegfs/scratch/ieo5244/mmref_patch08_smoke_work/a4/0bc47bc3c5e70f0e602a4fe946683a
+Oct-28 16:00:59.018 [Task submitter] INFO  nextflow.Session - [a4/0bc47b] Submitted process > MMREF_DISCOVERY:MMREF_PREP_REFERENCE (PATCH08_SMOKE)
+Oct-28 16:01:37.832 [SIGINT handler] DEBUG nextflow.Session - Session aborted -- Cause: SIGINT
+Oct-28 16:01:37.872 [SIGINT handler] DEBUG nextflow.Session - The following nodes are still active:
+[process] MMREF_DISCOVERY:MMREF_MUMMER_SELF
+  status=ACTIVE
+  port 0: (value) OPEN  ; channel: -
+  port 1: (value) bound ; channel: cfg
+  port 2: (cntrl) -     ; channel: $
+
+[process] MMREF_DISCOVERY:MMREF_REPRISE
+  status=ACTIVE
+  port 0: (value) OPEN  ; channel: -
+  port 1: (value) bound ; channel: cfg
+  port 2: (cntrl) -     ; channel: $
+
+[process] MMREF_DISCOVERY:MMREF_TRF
+  status=ACTIVE
+  port 0: (value) OPEN  ; channel: -
+  port 1: (value) bound ; channel: cfg
+  port 2: (cntrl) -     ; channel: $
+
+[process] MMREF_DISCOVERY:MMREF_CDHIT
+  status=ACTIVE
+  port 0: (value) OPEN  ; channel: -
+  port 1: (value) bound ; channel: cfg
+  port 2: (cntrl) -     ; channel: $
+
+Oct-28 16:01:37.878 [SIGINT handler] WARN  n.processor.TaskPollingMonitor - Killing running tasks (1)
+Oct-28 16:01:37.919 [SIGINT handler] DEBUG n.trace.WorkflowStatsObserver - Workflow completed > WorkflowStats[succeededCount=0; failedCount=0; ignoredCount=0; cachedCount=0; pendingCount=0; submittedCount=0; runningCount=0; retriesCount=0; abortedCount=1; succeedDuration=0ms; failedDuration=0ms; cachedDuration=0ms;loadCpus=0; loadMemory=0; peakRunning=0; peakCpus=0; peakMemory=0; ]
+Oct-28 16:01:38.070 [SIGINT handler] DEBUG nextflow.trace.ReportObserver - Workflow completed -- rendering execution report
+Oct-28 16:01:38.797 [SIGINT handler] DEBUG nextflow.trace.TimelineObserver - Workflow completed -- rendering execution timeline
+Oct-28 16:01:38.911 [SIGINT handler] DEBUG nextflow.trace.TraceFileObserver - Workflow completed -- saving trace file
+Oct-28 16:01:38.915 [main] DEBUG nextflow.Session - Session await > all processes finished
+Oct-28 16:01:38.915 [main] DEBUG nextflow.Session - Session await > all barriers passed
+Oct-28 16:01:38.987 [main] DEBUG n.trace.WorkflowStatsObserver - Workflow completed > WorkflowStats[succeededCount=0; failedCount=0; ignoredCount=0; cachedCount=0; pendingCount=0; submittedCount=0; runningCount=0; retriesCount=0; abortedCount=1; succeedDuration=0ms; failedDuration=0ms; cachedDuration=0ms;loadCpus=0; loadMemory=0; peakRunning=0; peakCpus=0; peakMemory=0; ]
+Oct-28 16:01:38.988 [Task monitor] DEBUG n.processor.TaskPollingMonitor - <<< barrier arrives (monitor: slurm) - terminating tasks monitor poll loop
+Oct-28 16:01:38.997 [main] DEBUG nextflow.trace.ReportObserver - Workflow completed -- rendering execution report
+Oct-28 16:01:39.392 [main] DEBUG nextflow.trace.TimelineObserver - Workflow completed -- rendering execution timeline
+Oct-28 16:01:39.474 [main] DEBUG nextflow.trace.TraceFileObserver - Workflow completed -- saving trace file
+Oct-28 16:01:39.493 [main] DEBUG nextflow.cache.CacheDB - Closing CacheDB done
+Oct-28 16:01:39.509 [main] INFO  org.pf4j.AbstractPluginManager - Stop plugin 'nf-boost@0.7.0'
+Oct-28 16:01:39.509 [main] DEBUG nextflow.plugin.BasePlugin - Plugin stopped nf-boost
+Oct-28 16:01:39.511 [main] DEBUG nextflow.script.ScriptRunner - > Execution complete -- Goodbye

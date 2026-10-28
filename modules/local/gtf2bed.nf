@@ -9,23 +9,33 @@ process GTF2BED {
 
     input:
     path gtf
+    path fasta
 
     output:
     path '*.bed'       , emit: bed
-    path "versions.yml", emit: versions
+    path 'versions.yml', emit: versions
 
     when:
     task.ext.when == null || task.ext.when
 
-    script: // This script is bundled with the pipeline, in nf-core/rnaseq/bin/
+    script:
+    def prefix = gtf.baseName
     """
-    gtf2bed \\
-        $gtf \\
-        > ${gtf.baseName}.bed
+    set -euo pipefail
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        perl: \$(echo \$(perl --version 2>&1) | sed 's/.*v\\(.*\\)) built.*/\\1/')
-    END_VERSIONS
+    # The compatibility check/filter is implemented inside gtf2bed itself so
+    # this process only relies on Perl, which is guaranteed by the container.
+    # Do not add coreutils-only helpers (comm/sort/cut/wc/head/tr) here.
+    gtf2bed \
+        --fasta $fasta \
+        $gtf \
+        > ${prefix}.bed
+
+    test -s ${prefix}.bed
+
+    printf '%s\n' \
+        '"${task.process}":' \
+        "    perl: \$(perl -e 'print \$]')" \
+        > versions.yml
     """
 }

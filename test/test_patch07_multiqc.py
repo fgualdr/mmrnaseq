@@ -27,6 +27,9 @@ def main() -> None:
     merge_nf = (ROOT / 'modules/local/mm_qc_merge.nf').read_text()
     merge_py = (ROOT / 'bin/mm_merge_qc.py').read_text()
     template = (ROOT / 'lib/NfcoreTemplate.groovy').read_text()
+    cfg_text = (ROOT / 'assets/multiqc_config.yml').read_text()
+    dupradar = (ROOT / 'bin/dupradar.r').read_text()
+    clustering_header = (ROOT / 'assets/multiqc/deseq2_clustering_header.txt').read_text()
     schema = json.loads((ROOT / 'nextflow_schema.json').read_text())
 
     # MultiQC itself and the software-version aggregator are upgraded to 1.35.
@@ -56,6 +59,16 @@ def main() -> None:
     assert 'BAM_FILTER_EM.out.bam_quantitative' in workflow
     assert '.join(ch_mapping_pass, by: [0])' in workflow
 
+    # Nextflow collect() flattens tuple emissions by default. Quantitative-usability
+    # rows must remain one tuple per sample so rows.each receives the full tuple, not
+    # the metadata LinkedHashMap alone.
+    assert 'ch_fragment_usability\n        .collect(flat: false)' in workflow
+    assert 'ch_fragment_usability\n        .collect()' not in workflow
+
+    # Process-script shell substitutions must be escaped from Groovy/Nextflow.
+    assert r'\$(multiqc --version' in multiqc_nf
+    assert '$(multiqc --version' not in multiqc_nf.replace(r'\$(multiqc --version', '')
+
     # Preseq now measures the same quantitative BAM used downstream.
     assert workflow.index('BAM_SORT_STATS_SAMTOOLS_BAM(ch_genome_bam') < workflow.index('PRESEQ_LCEXTRAP(ch_genome_bam)')
 
@@ -80,18 +93,57 @@ def main() -> None:
     call_block = workflow.split('        MULTIQC (\n', 1)[1].split('        )\n', 1)[0]
     call_args = [ln for ln in call_block.splitlines() if ln.strip()]
     assert n_inputs == len(call_args), (n_inputs, len(call_args))
-    for token in ['ch_fragment_usability_multiqc', 'ch_mmresolver_multiqc', 'ch_mmdensity_multiqc', 'ch_salmon_multiqc']:
+    for token in ['ch_strand_qc_multiqc', 'ch_fragment_usability_multiqc', 'ch_mmresolver_multiqc', 'ch_mmdensity_multiqc', 'ch_salmon_multiqc']:
         assert token in call_block, token
 
     # Cleaned workflow must not reintroduce dead aligners into the report.
-    cfg_text = (ROOT / 'assets/multiqc_config.yml').read_text()
     assert '\n  - hisat2\n' not in cfg_text
     assert '\n  - rsem\n' not in cfg_text
     for token in ['mm_fragment_usability', 'mmresolver', 'mmdensity']:
         assert token in cfg_text
     if yaml is not None:
         cfg = yaml.safe_load(cfg_text)
-        assert {'mm_fragment_usability', 'mmresolver', 'mmdensity'} <= set(cfg['custom_data'])
+        assert {'mm_fragment_usability', 'mmresolver', 'mmdensity', 'strand_qc'} <= set(cfg['custom_data'])
+        assert 'fail_strand_check' not in cfg['custom_data']
+        assert 'top_modules' not in cfg
+        assert cfg['export_plots'] is True
+        assert cfg['export_plot_formats'] == ['png', 'svg', 'pdf']
+        assert cfg['export_plots_timeout'] == 300
+        assert cfg['report_section_order']['fgualdr-mmrnaseq-summary']['order'] > cfg['report_section_order']['star']['order']
+        assert cfg['report_section_order']['star']['order'] > cfg['report_section_order']['mm_fragment_usability']['order']
+        assert cfg['report_section_order']['mm_fragment_usability']['order'] > cfg['report_section_order']['samtools']['order']
+        assert cfg['report_section_order']['samtools']['order'] > cfg['report_section_order']['salmon']['order']
+        assert cfg['report_section_order']['nf-core-mmrnaseq-methods-description']['order'] < 0
+        fastqc_runs = [entry['fastqc'] for entry in cfg['module_order'] if isinstance(entry, dict) and 'fastqc' in entry]
+        assert len(fastqc_runs) == 2
+        assert {x['anchor'] for x in fastqc_runs} == {'fastqc_raw', 'fastqc_trimmed'}
+        assert all(x.get('generalstats') is False for x in fastqc_runs)
+        module_ids = [entry if isinstance(entry, str) else next(iter(entry)) for entry in cfg['module_order']]
+        for module_id in ['custom_content', 'fastqc', 'fastp', 'star', 'samtools', 'rseqc', 'qualimap', 'preseq', 'picard', 'salmon']:
+            assert module_id in module_ids
+
+    # Python 3.14/NFS Kaleido workaround plus fail-loud static export contract.
+    assert 'set_start_method("spawn", force=True)' in multiqc_nf
+    assert 'mktemp -d /tmp/mmrnaseq_multiqc' in multiqc_nf
+    assert 'export TMPDIR=' in multiqc_nf
+    assert r'zero .\$ext files' in multiqc_nf
+    assert 'for ext in png svg pdf' in multiqc_nf
+
+    # MultiQC 1.35 custom plot configuration uses current key names.
+    for deprecated in ['xLog:', 'xPlotLines:', "LongDash", 'reverseColors:']:
+        assert deprecated not in dupradar + clustering_header
+    assert 'xlog: True' in dupradar
+    assert 'x_lines:' in dupradar
+    assert 'reverse_colors: True' in clustering_header
+
+    # Strand QC is a complete all-sample table; invalid inference is not a false
+    # biological unstranded call or an automatic sample failure.
+    assert 'ch_strand_qc_multiqc' in workflow
+    assert 'ch_fail_strand_multiqc' not in workflow
+    assert "pass_strand_check[meta.id] = 'INDETERMINATE'" in workflow
+    assert 'getRseqcStrandStatus' in helper
+    assert 'getInferexperimentStrandedness' not in helper
+    assert 'indeterminate_strand_count' in template
 
     # Schema / completion messaging now describe the actual threshold semantics.
     blob = json.dumps(schema)

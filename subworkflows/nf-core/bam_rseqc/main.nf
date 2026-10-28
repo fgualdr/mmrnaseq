@@ -56,10 +56,14 @@ workflow BAM_RSEQC {
     //
     // Run RSeQC infer_experiment.py
     //
-    inferexperiment_txt = Channel.empty()
+    inferexperiment_txt    = Channel.empty()
+    inferexperiment_diagnostic = Channel.empty()
+    inferexperiment_status = Channel.empty()
     if ('infer_experiment' in rseqc_modules) {
         RSEQC_INFEREXPERIMENT ( ch_bam, ch_bed )
-        inferexperiment_txt = RSEQC_INFEREXPERIMENT.out.txt
+        inferexperiment_txt    = RSEQC_INFEREXPERIMENT.out.txt
+        inferexperiment_diagnostic = RSEQC_INFEREXPERIMENT.out.diagnostic
+        inferexperiment_status = RSEQC_INFEREXPERIMENT.out.qc_status
         ch_versions = ch_versions.mix(RSEQC_INFEREXPERIMENT.out.versions.first())
     }
 
@@ -143,6 +147,8 @@ workflow BAM_RSEQC {
     innerdistance_rscript           // channel: [ val(meta), r   ]
 
     inferexperiment_txt             // channel: [ val(meta), txt ]
+    inferexperiment_diagnostic      // channel: [ val(meta), txt ]
+    inferexperiment_status          // channel: [ val(meta), tsv ]
 
     junctionannotation_bed          // channel: [ val(meta), bed ]
     junctionannotation_interact_bed // channel: [ val(meta), bed ]

@@ -12,8 +12,10 @@ process RSEQC_INFEREXPERIMENT {
     path  bed
 
     output:
-    tuple val(meta), path("*.infer_experiment.txt"), emit: txt
-    path  "versions.yml"                           , emit: versions
+    tuple val(meta), path("*.infer_experiment.txt"),        emit: txt
+    tuple val(meta), path("*.infer_experiment.stderr.txt"), emit: diagnostic
+    tuple val(meta), path("*.infer_experiment.status.tsv"), emit: qc_status
+    path  'versions.yml'                                   , emit: versions
 
     when:
     task.ext.when == null || task.ext.when
@@ -21,12 +23,30 @@ process RSEQC_INFEREXPERIMENT {
     script:
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
+    def provided = meta.strandedness ?: 'unknown'
     """
-    infer_experiment.py \\
-        -i $bam \\
-        -r $bed \\
-        $args \\
-        > ${prefix}.infer_experiment.txt
+    set +e
+    infer_experiment.py \
+        -i $bam \
+        -r $bed \
+        $args \
+        > ${prefix}.infer_experiment.txt \
+        2> ${prefix}.infer_experiment.stderr.txt
+    rc=\$?
+    set -e
+
+    if [ "\$rc" -ne 0 ]; then
+        cat ${prefix}.infer_experiment.stderr.txt >&2
+        exit "\$rc"
+    fi
+
+    python ${projectDir}/bin/rseqc_infer_status.py \
+        --sample '${meta.id}' \
+        --provided '${provided}' \
+        --stdout ${prefix}.infer_experiment.txt \
+        --stderr ${prefix}.infer_experiment.stderr.txt \
+        --cutoff 30 \
+        --output ${prefix}.infer_experiment.status.tsv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
