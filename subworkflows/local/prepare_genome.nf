@@ -11,8 +11,6 @@ include { GUNZIP as GUNZIP_ADDITIONAL_FASTA } from '../../modules/nf-core/gunzip
 
 include { UNTAR as UNTAR_BBSPLIT_INDEX      } from '../../modules/nf-core/untar/main'
 include { UNTAR as UNTAR_STAR_INDEX         } from '../../modules/nf-core/untar/main'
-include { UNTAR as UNTAR_RSEM_INDEX         } from '../../modules/nf-core/untar/main'
-include { UNTAR as UNTAR_HISAT2_INDEX       } from '../../modules/nf-core/untar/main'
 include { UNTAR as UNTAR_SALMON_INDEX       } from '../../modules/nf-core/untar/main'
 
 include { CUSTOM_GETCHROMSIZES              } from '../../modules/nf-core/custom/getchromsizes/main'
@@ -21,10 +19,9 @@ include { BBMAP_BBSPLIT                     } from '../../modules/nf-core/bbmap/
 include { STAR_GENOMEGENERATE               } from '../../modules/nf-core/star/genomegenerate/main'
 
 include { SALMON_INDEX                      } from '../../modules/nf-core/salmon/index/main'
-include { RSEM_PREPAREREFERENCE as RSEM_PREPAREREFERENCE_GENOME } from '../../modules/nf-core/rsem/preparereference/main'
-include { RSEM_PREPAREREFERENCE as MAKE_TRANSCRIPTS_FASTA       } from '../../modules/nf-core/rsem/preparereference/main'
 
 include { PREPROCESS_TRANSCRIPTS_FASTA_GENCODE } from '../../modules/local/preprocess_transcripts_fasta_gencode'
+include { GTF_TO_TRANSCRIPT_FASTA               } from '../../modules/local/gtf_to_transcript_fasta'
 include { GTF2BED                              } from '../../modules/local/gtf2bed'
 include { CAT_ADDITIONAL_FASTA                 } from '../../modules/local/cat_additional_fasta'
 include { GTF_GENE_FILTER                      } from '../../modules/local/gtf_gene_filter'
@@ -38,13 +35,11 @@ workflow PREPARE_GENOME {
     additional_fasta     //      file: /path/to/additional.fasta
     transcript_fasta     //      file: /path/to/transcript.fasta
     gene_bed             //      file: /path/to/gene.bed
-    splicesites          //      file: /path/to/splicesites.txt
     bbsplit_fasta_list   //      file: /path/to/bbsplit_fasta_list.txt
     star_index           // directory: /path/to/star/index/
-    rsem_index           // directory: /path/to/rsem/index/
     salmon_index         // directory: /path/to/salmon/index/
 
-    bbsplit_index        // directory: /path/to/rsem/index/
+    bbsplit_index        // directory: /path/to/bbsplit/index/
     gencode              //   boolean: whether the genome is from GENCODE
     is_aws_igenome       //   boolean: whether the genome files are from AWS iGenomes
     biotype              //    string: if additional fasta file is provided biotype value to use when appending entries to GTF file
@@ -133,9 +128,10 @@ workflow PREPARE_GENOME {
         }
     } else {
         ch_filter_gtf = GTF_GENE_FILTER ( ch_fasta, ch_gtf ).gtf
-        ch_transcript_fasta = MAKE_TRANSCRIPTS_FASTA ( ch_fasta, ch_filter_gtf ).transcript_fasta
+        GTF_TO_TRANSCRIPT_FASTA ( ch_fasta, ch_filter_gtf )
+        ch_transcript_fasta = GTF_TO_TRANSCRIPT_FASTA.out.fasta
         ch_versions         = ch_versions.mix(GTF_GENE_FILTER.out.versions)
-        ch_versions         = ch_versions.mix(MAKE_TRANSCRIPTS_FASTA.out.versions)
+        ch_versions         = ch_versions.mix(GTF_TO_TRANSCRIPT_FASTA.out.versions)
     }
 
     //
@@ -197,25 +193,6 @@ workflow PREPARE_GENOME {
     }
 
     //
-    // Uncompress RSEM index or generate from scratch if required
-    //
-    ch_rsem_index = Channel.empty()
-    if ('star_rsem' in prepare_tool_indices) {
-        if (rsem_index) {
-            if (rsem_index.endsWith('.tar.gz')) {
-                ch_rsem_index = UNTAR_RSEM_INDEX ( [ [:], rsem_index ] ).untar.map { it[1] }
-                ch_versions   = ch_versions.mix(UNTAR_RSEM_INDEX.out.versions)
-            } else {
-                ch_rsem_index = Channel.value(file(rsem_index))
-            }
-        } else {
-            ch_rsem_index = RSEM_PREPAREREFERENCE_GENOME ( ch_fasta, ch_gtf ).index
-            ch_versions   = ch_versions.mix(RSEM_PREPAREREFERENCE_GENOME.out.versions)
-        }
-    }
-
-
-    //
     // Uncompress Salmon index or generate from scratch if required
     //
     ch_salmon_index = Channel.empty()
@@ -248,7 +225,6 @@ workflow PREPARE_GENOME {
     chrom_sizes      = ch_chrom_sizes            // channel: path(genome.sizes)
     bbsplit_index    = ch_bbsplit_index          // channel: path(bbsplit/index/)
     star_index       = ch_star_index             // channel: path(star/index/)
-    rsem_index       = ch_rsem_index             // channel: path(rsem/index/)
     salmon_index     = ch_salmon_index           // channel: path(salmon/index/)
     versions         = ch_versions.ifEmpty(null) // channel: [ versions.yml ]
 }

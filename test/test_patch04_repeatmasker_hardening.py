@@ -95,9 +95,12 @@ def main():
 
     # PATCH03 contract must survive the rebase unchanged: quantitative is the
     # primary downstream BAM; high-confidence and full ambiguity remain separate.
-    assert 'ch_genome_bam      = BAM_FILTER_EM.out.bam_quantitative' in workflow
-    assert 'ch_mm_highconf_bam = BAM_FILTER_EM.out.bam_highconf' in workflow
-    assert 'ch_mm_full_bam     = BAM_FILTER_EM.out.bam_full' in workflow
+    assert 'BAM_FILTER_EM.out.bam_quantitative' in workflow
+    assert 'BAM_FILTER_EM.out.bam_highconf' in workflow
+    assert 'BAM_FILTER_EM.out.bam_full' in workflow
+    assert '.set { ch_genome_bam }' in workflow
+    assert '.set { ch_mm_highconf_bam }' in workflow
+    assert '.set { ch_mm_full_bam }' in workflow
     assert 'BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF' in workflow
     assert 'BAM_SORT_STATS_SAMTOOLS_MM_FULL' in workflow
     assert 'ch_genome_bam = BAM_FILTER_EM.out.bam_confident' not in workflow

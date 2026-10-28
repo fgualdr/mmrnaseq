@@ -231,6 +231,7 @@ def main() -> int:
     boundary_orientations: List[str] = []
     selected_ks: List[float] = []
     selected_p95_radii: List[float] = []
+    density_mqc_rows: List[List[str]] = []
 
     required_density_cols = {
         "orientation_group", "unique_anchor_weight", "background_density_per_bp",
@@ -295,6 +296,22 @@ def main() -> int:
         merged[f"knn_cv_margin_to_second_best_{safe}"] = fmt(margin_second)
         merged[f"knn_cv_sampled_anchor_positions_{safe}"] = sel["sampled_anchor_positions"]
 
+        density_mqc_rows.append([
+            f"{a.sample}|{safe}",
+            a.sample,
+            ori,
+            row["unique_anchor_weight"],
+            row["background_density_per_bp"],
+            fmt(selected_k),
+            fmt(search_max),
+            str(boundary),
+            row["knn_cv_loglik"],
+            fmt(gain_previous),
+            sel["median_cv_radius_bp"],
+            sel["p95_cv_radius_bp"],
+            row["absolute_normalized_as_cutoff"],
+        ])
+
     merged["density_orientation_count"] = str(len(density))
     merged["knn_boundary_hit_any"] = "1" if boundary_orientations else "0"
     merged["knn_boundary_orientation_count"] = str(len(boundary_orientations))
@@ -329,12 +346,29 @@ def main() -> int:
         handle.write(
             "# id: mmresolver\n"
             "# section_name: Multimapper resolver\n"
-            "# description: Fragment-level Bayesian STAR-candidate resolution, BAM-tier realization, and density-bandwidth diagnostics. Alignment-record counts are explicitly labelled.\n"
+            "# description: Fragment-level Bayesian STAR-candidate resolution and BAM-tier realization. Fragment counts and BAM alignment-record counts are kept distinct.\n"
             "# plot_type: table\n"
         )
         writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
         writer.writerow(["Sample"] + cols)
         writer.writerow([a.sample] + [merged.get(x, "0") for x in cols])
+
+    dmq = Path(a.output_prefix + ".mmdensity_mqc.tsv")
+    with dmq.open("w", newline="", encoding="utf-8") as handle:
+        handle.write(
+            "# id: mmdensity\n"
+            "# section_name: Multimapper density bandwidth\n"
+            "# description: Sample- and orientation-specific adaptive unique-anchor density model. A boundary hit means the selected k equals the largest k tested and should be reviewed before changing the resolver grid.\n"
+            "# plot_type: table\n"
+        )
+        writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
+        writer.writerow([
+            "Sample-orientation", "Sample", "Orientation", "Unique anchor weight",
+            "Background density / bp", "Selected k", "Search max k", "Boundary hit",
+            "CV log-likelihood", "Gain vs previous k", "Median CV radius (bp)",
+            "P95 CV radius (bp)", "Absolute normalized AS cutoff",
+        ])
+        writer.writerows(density_mqc_rows)
 
     return 0
 

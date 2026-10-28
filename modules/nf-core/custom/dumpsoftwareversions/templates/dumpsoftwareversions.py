@@ -57,8 +57,19 @@ def main():
         "yaml": yaml.__version__,
     }
 
-    with open("$versions") as f:
-        versions_by_process = yaml.load(f, Loader=yaml.BaseLoader) | versions_this_module
+    try:
+        with open("$versions", encoding="utf-8") as f:
+            loaded = yaml.safe_load(f) or {}
+    except yaml.YAMLError as exc:
+        mark = getattr(exc, "problem_mark", None)
+        where = f" line {mark.line + 1}, column {mark.column + 1}" if mark else ""
+        raise RuntimeError(
+            f"Malformed versions YAML in $versions{where}. Fix the producing module; "
+            "software-version metadata must be valid YAML."
+        ) from exc
+    if not isinstance(loaded, dict):
+        raise RuntimeError("$versions must contain a YAML mapping keyed by process name")
+    versions_by_process = loaded | versions_this_module
 
     # aggregate versions by the module name (derived from fully-qualified process name)
     versions_by_module = {}

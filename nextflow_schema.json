@@ -272,30 +272,11 @@
                     "description": "FASTA file to concatenate to genome FASTA file e.g. containing spike-in sequences.",
                     "help_text": "If provided, the sequences in this file will get concatenated to the existing genome FASTA file, a GTF file will be automatically created using the entire sequence as the gene, transcript, and exon features, and any alignment index will get created from the combined FASTA and GTF. It is recommended to save the reference with `--save_reference` to re-use the index for future runs so you do not need to create it again."
                 },
-                "splicesites": {
-                    "type": "string",
-                    "format": "file-path",
-                    "mimetype": "text/plain",
-                    "fa_icon": "fas fa-hand-scissors",
-                    "description": "Splice sites file required for HISAT2."
-                },
                 "star_index": {
                     "type": "string",
                     "format": "path",
                     "fa_icon": "fas fa-bezier-curve",
                     "description": "Path to directory or tar.gz archive for pre-built STAR index."
-                },
-                "hisat2_index": {
-                    "type": "string",
-                    "format": "path",
-                    "fa_icon": "fas fa-bezier-curve",
-                    "description": "Path to directory or tar.gz archive for pre-built HISAT2 index."
-                },
-                "rsem_index": {
-                    "type": "string",
-                    "format": "path",
-                    "fa_icon": "fas fa-bezier-curve",
-                    "description": "Path to directory or tar.gz archive for pre-built RSEM index."
                 },
                 "salmon_index": {
                     "type": "string",
@@ -303,19 +284,11 @@
                     "fa_icon": "fas fa-bezier-curve",
                     "description": "Path to directory or tar.gz archive for pre-built Salmon index."
                 },
-                "hisat2_build_memory": {
-                    "type": "string",
-                    "default": "200.GB",
-                    "fa_icon": "fas fa-memory",
-                    "pattern": "^\\d+(\\.\\d+)?\\.?\\s*(K|M|G|T)?B$",
-                    "description": "Minimum memory required to use splice sites and exons in the HiSAT2 index build process.",
-                    "help_text": "HiSAT2 requires a huge amount of RAM to build a genome index for larger genomes, if including splice sites and exons e.g. the human genome might typically require 200GB. If you specify less than this threshold for the `HISAT2_BUILD` process then the splice sites and exons will be ignored, meaning that the process will require a lot less memory. If you are working with a small genome, set this parameter to a lower value to reduce the threshold for skipping this check. If using a larger genome, consider supplying more memory to the `HISAT2_BUILD` process."
-                },
                 "gencode": {
                     "type": "boolean",
                     "fa_icon": "fas fa-code-branch",
                     "description": "Specify if your GTF annotation is in GENCODE format.",
-                    "help_text": "If your GTF file is in GENCODE format and you would like to run Salmon i.e. `--pseudo_aligner salmon`, you will need to provide this parameter in order to build the Salmon index appropriately."
+                    "help_text": "Set this when the supplied GTF/transcript annotation follows GENCODE conventions so transcript FASTA and Salmon handling use the expected identifiers."
                 },
                 "gtf_extra_attributes": {
                     "type": "string",
@@ -421,20 +394,10 @@
                 "aligner": {
                     "type": "string",
                     "default": "star_salmon",
-                    "description": "Specifies the alignment algorithm to use - available options are 'star_salmon', 'star_rsem' and 'hisat2'.",
+                    "description": "Use STAR for splice-aware genomic alignment and Salmon for transcript quantification.",
                     "fa_icon": "fas fa-map-signs",
                     "enum": [
-                        "star_salmon",
-                        "star_rsem",
-                        "hisat2"
-                    ]
-                },
-                "pseudo_aligner": {
-                    "type": "string",
-                    "description": "Specifies the pseudo aligner to use - available options are 'salmon'. Runs in addition to '--aligner'.",
-                    "fa_icon": "fas fa-hamburger",
-                    "enum": [
-                        "salmon"
+                        "star_salmon"
                     ]
                 },
                 "bam_csi_index": {
@@ -457,18 +420,13 @@
                     "type": "number",
                     "default": 5,
                     "fa_icon": "fas fa-percentage",
-                    "description": "Minimum percentage of uniquely mapped reads below which samples are removed from further processing.",
-                    "help_text": "Some downstream steps in the pipeline will fail if this threshold is too low."
+                    "description": "Minimum percentage of STAR input fragments that must enter the final quantitative BAM after multimapper handling.",
+                    "help_text": "When Bayesian resolution is enabled, quantitative usable fragments are trusted unique plus globally expected-FDR-resolved multimappers. With --skip_em true, only trusted unique fragments count as usable. Samples below this threshold are excluded from downstream quantitative BAM analyses."
                 },
                 "seq_center": {
                     "type": "string",
                     "description": "Sequencing center information to be added to read group of BAM files.",
                     "fa_icon": "fas fa-synagogue"
-                },
-                "stringtie_ignore_gtf": {
-                    "type": "boolean",
-                    "description": "Perform reference-guided de novo assembly of transcripts using StringTie i.e. dont restrict to those in GTF file.",
-                    "fa_icon": "fas fa-ban"
                 },
                 "star_multimap_max": {
                     "type": "integer",
@@ -506,19 +464,13 @@
                 "save_unaligned": {
                     "type": "boolean",
                     "fa_icon": "fas fa-save",
-                    "description": "Where possible, save unaligned reads from either STAR, HISAT2 or Salmon to the results directory.",
+                    "description": "Where possible, save unaligned reads from STAR or Salmon to the results directory.",
                     "help_text": "This may either be in the form of FastQ or BAM files depending on the options available for that particular tool."
                 },
                 "skip_em": {
                     "type": "boolean",
-                    "description": "skip_em",
-                    "help_text": "skip_em"
-                },
-                "em_iter": {
-                    "type": "integer",
-                    "default": 1000,
-                    "description": "maximum iterations",
-                    "help_text": "The default will be 1000"
+                    "description": "Skip Bayesian multimapper resolution and use a trusted-unique-only quantitative BAM.",
+                    "help_text": "Legacy parameter name retained for compatibility. When false (default), STAR multimappers are resolved with the Bayesian candidate model and quantitative/high-confidence/full BAM tiers are generated. When true, the same PATCH01 fragment contract is still applied and all multimappers are excluded from downstream quantitative analysis; only trusted unique fragments enter the quantitative BAM."
                 },
                 "save_align_intermeds": {
                     "type": "boolean",
@@ -541,38 +493,14 @@
                 "skip_markduplicates": {
                     "type": "boolean",
                     "fa_icon": "fas fa-fast-forward",
-                    "description": "Skip picard MarkDuplicates step."
+                    "description": "Skip Picard coordinate duplicate marking.",
+                    "help_text": "Coordinate Picard duplicate marking on the pre-resolution/pre-filter STAR BAM is disabled in both Bayesian and skip_em modes because multimapper primary placement can affect duplicate identity. Keep true for this workflow; UMI-aware handling is separate."
                 },
                 "skip_alignment": {
                     "type": "boolean",
                     "fa_icon": "fas fa-fast-forward",
-                    "description": "Skip all of the alignment-based processes within the pipeline."
-                },
-                "em_seed": {
-                    "type": "integer",
-                    "default": 1,
-                    "description": "Random seed for deterministic resolver tie handling."
-                },
-                "em_locus_merge_distance": {
-                    "type": "integer",
-                    "default": 2000,
-                    "minimum": 0,
-                    "description": "Distance in bp used to merge nearby STAR multimapping positions into one shared v1 locus. This is separate from the local-prior bandwidth."
-                },
-                "em_hotspot_distance": {
-                    "type": [
-                        "integer",
-                        "null"
-                    ],
-                    "minimum": 0,
-                    "description": "Deprecated compatibility alias for em_locus_merge_distance."
-                },
-                "label_overlap": {
-                    "type": "number",
-                    "default": 0.25,
-                    "minimum": 0.0,
-                    "maximum": 1.0,
-                    "description": "Minimum fraction of a read/fragment interval that must overlap a hotspot when assigning it to the local prior region."
+                    "description": "Unsupported in mmrnaseq: genomic STAR alignment is required for multimapper inference.",
+                    "help_text": "Keep false. mmrnaseq requires a STAR genomic BAM because multimapper candidate generation and local positional evidence are genome based."
                 },
                 "mm_resolution_fdr": {
                     "type": "number",
@@ -629,11 +557,6 @@
                     "type": "boolean",
                     "fa_icon": "fas fa-fast-forward",
                     "description": "Skip bigWig file creation."
-                },
-                "skip_stringtie": {
-                    "type": "boolean",
-                    "fa_icon": "fas fa-fast-forward",
-                    "description": "Skip StringTie."
                 },
                 "skip_fastqc": {
                     "type": "boolean",
@@ -883,7 +806,7 @@
                     "type": "boolean",
                     "default": false,
                     "description": "Enable nf-boost automatic cleanup of completed task work files.",
-                    "help_text": "Disabled by default because nf-boost cleanup removes cached task outputs and therefore prevents normal reuse of those tasks with -resume. Enable only for production runs where reclaiming work-directory space is more important than resumability."
+                    "help_text": "Disabled by default because cleanup removes cached task outputs and therefore prevents normal reuse of those tasks with -resume. Enable only for production runs where reclaiming work-directory space is more important than resumability."
                 }
             }
         }

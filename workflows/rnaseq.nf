@@ -20,8 +20,8 @@ checkPathParamList = [
     params.input, params.multiqc_config,params.public_data_ids,
     params.fasta, params.transcript_fasta, params.additional_fasta,
     params.gtf, params.gff, params.gene_bed,
-    params.ribo_database_manifest, params.splicesites, params.rmsker,
-    params.star_index,  params.rsem_index, params.salmon_index
+    params.ribo_database_manifest, params.rmsker,
+    params.star_index, params.salmon_index
 ]
 for (param in checkPathParamList) { if (param) { file(param, checkIfExists: true) } }
 
@@ -55,7 +55,6 @@ if (!params.skip_bbsplit && !params.bbsplit_index && params.bbsplit_fasta_list) 
 def prepareToolIndices  = []
 if (!params.skip_bbsplit)   { prepareToolIndices << 'bbsplit'             }
 if (!params.skip_alignment) { prepareToolIndices << params.aligner        }
-if (params.pseudo_aligner)  { prepareToolIndices << params.pseudo_aligner }
 
 // Get RSeqC modules to run
 def rseqc_modules = params.rseqc_modules ? params.rseqc_modules.split(',').collect{ it.trim().toLowerCase() } : []
@@ -110,7 +109,6 @@ ch_biotypes_header_multiqc   = file("$projectDir/assets/multiqc/biotypes_header.
 //
 // MODULE: Loaded from modules/local/
 //
-include { BEDTOOLS_GENOMECOV                 } from '../modules/local/bedtools_genomecov'
 include { DESEQ2_QC_NORM as DESEQ2_QC_STAR_SALMON } from '../modules/local/deseq2_qc_norm'
 include { DUPRADAR                           } from '../modules/local/dupradar'
 include { MULTIQC                            } from '../modules/local/multiqc'
@@ -132,6 +130,7 @@ include { PREP_GTF      } from '../modules/local/prep_gtf'
 include { INTRON_EXON_COUNT } from '../modules/local/intron_exon_count'
 include { NORMALIZE_COUNTS_INTRON_EXON } from '../modules/local/norm_counts_intron_exon'
 include { DEEPTOOLS_BIGWIG_NORM } from '../modules/local/deeptools_bw_norm'
+include { UMITOOLS_PREPAREFORSALMON } from '../modules/local/umitools_prepareforsalmon'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -191,10 +190,8 @@ workflow RNASEQ {
         params.additional_fasta,
         params.transcript_fasta,
         params.gene_bed,
-        params.splicesites,
         params.bbsplit_fasta_list,
         params.star_index,
-        params.rsem_index,
         params.salmon_index,
         params.bbsplit_index,
         params.gencode,
@@ -242,7 +239,6 @@ workflow RNASEQ {
         
         ch_versions = ch_versions.mix(FASTQ_FROM_SRA.out.versions)
 
-        ch_versions.view()
 
     } else if(ch_input){
 
@@ -435,6 +431,7 @@ workflow RNASEQ {
     ch_samtools_flagstat          = Channel.empty()
     ch_samtools_idxstats          = Channel.empty()
     ch_star_multiqc               = Channel.empty()
+    ch_salmon_multiqc             = Channel.empty()
     ch_aligner_pca_multiqc        = Channel.empty()
     ch_aligner_clustering_multiqc = Channel.empty()
 
@@ -501,7 +498,7 @@ workflow RNASEQ {
                 BAM_DEDUP_STATS_SAMTOOLS_UMITOOLS_TRANSCRIPTOME.out.bam
             )
 
-            // Only run prepare_for_rsem.py on paired-end BAM files
+            // Only run prepare-for-salmon.py on paired-end BAM files
             SAMTOOLS_SORT
                 .out
                 .bam
@@ -540,6 +537,7 @@ workflow RNASEQ {
                 params.salmon_quant_libtype ?: ''
             )
             ch_versions = ch_versions.mix(QUANTIFY_STAR_SALMON.out.versions)
+            ch_salmon_multiqc = QUANTIFY_STAR_SALMON.out.results
             // Run DESeq2 QC on Salmon counts
             // DESEQ2_QC_STAR_SALMON (
             //     QUANTIFY_STAR_SALMON.out.counts_gene,
@@ -553,78 +551,24 @@ workflow RNASEQ {
     }
 
     //
-    // Filter channels to get samples that passed STAR minimum mapping percentage
+    // Mapping acceptance is evaluated only after multimapper handling below.
+    // A sample is retained according to the fraction of STAR input fragments that
+    // actually enter the quantitative BAM, not according to unique mapping alone.
     //
-    ch_fail_mapping_multiqc = Channel.empty()
-    if (!params.skip_alignment && params.aligner.contains('star')) {
-        ch_star_multiqc
-            .map { meta, align_log -> [ meta ] + WorkflowRnaseq.getStarPercentMapped(params, align_log) }
-            .set { ch_percent_mapped }
-
-        ch_genome_bam
-            .join(ch_percent_mapped, by: [0])
-            .map { meta, ofile, mapped, pass -> if (pass) [ meta, ofile ] }
-            .set { ch_genome_bam }
-
-        ch_genome_bam_index
-            .join(ch_percent_mapped, by: [0])
-            .map { meta, ofile, mapped, pass -> if (pass) [ meta, ofile ] }
-            .set { ch_genome_bam_index }
-
-        ch_percent_mapped
-            .branch { meta, mapped, pass ->
-                pass: pass
-                    pass_mapped_reads[meta.id] = true
-                    return [ "$meta.id\t$mapped" ]
-                fail: !pass
-                    pass_mapped_reads[meta.id] = false
-                    return [ "$meta.id\t$mapped" ]
-            }
-            .set { ch_pass_fail_mapped }
-
-        ch_pass_fail_mapped
-            .fail
-            .collect()
-            .map { 
-                tsv_data ->
-                    def header = ["Sample", "STAR uniquely mapped reads (%)"]
-                    WorkflowRnaseq.multiqcTsvFromList(tsv_data, header)
-            }
-            .set { ch_fail_mapping_multiqc }
-    }
+    ch_fail_mapping_multiqc       = Channel.empty()
+    ch_fragment_usability_multiqc = Channel.empty()
+    ch_preseq_multiqc             = Channel.empty()
 
     //
-    // MODULE: Run Preseq
-    //
-    ch_preseq_multiqc = Channel.empty()
-    if (!params.skip_alignment && !params.skip_qc && !params.skip_preseq) {
-        PRESEQ_LCEXTRAP (
-            ch_genome_bam
-        )
-        ch_preseq_multiqc = PRESEQ_LCEXTRAP.out.lc_extrap
-        ch_versions = ch_versions.mix(PRESEQ_LCEXTRAP.out.versions.first())
-    }
-
-    //
-    // SUBWORKFLOW: Mark duplicate reads
+    // Coordinate duplicate marking must not operate on the pre-resolution STAR BAM.
+    // This is unsafe in BOTH modes: with Bayesian resolution enabled, multimapper
+    // primaries are arbitrary; with --skip_em true, those multimappers are removed
+    // only after the PATCH01 fragment contract has identified trusted unique reads.
+    // A future patch may place Picard after quantitative-BAM realization.
     //
     ch_markduplicates_multiqc = Channel.empty()
     if (!params.skip_alignment && !params.skip_markduplicates && !params.with_umi) {
-        BAM_MARKDUPLICATES_PICARD (
-            ch_genome_bam,
-            PREPARE_GENOME.out.fasta,
-            PREPARE_GENOME.out.fai
-        )
-        ch_genome_bam             = BAM_MARKDUPLICATES_PICARD.out.bam
-        ch_genome_bam_index       = BAM_MARKDUPLICATES_PICARD.out.bai
-        ch_samtools_stats         = BAM_MARKDUPLICATES_PICARD.out.stats
-        ch_samtools_flagstat      = BAM_MARKDUPLICATES_PICARD.out.flagstat
-        ch_samtools_idxstats      = BAM_MARKDUPLICATES_PICARD.out.idxstats
-        ch_markduplicates_multiqc = BAM_MARKDUPLICATES_PICARD.out.metrics
-        if (params.bam_csi_index) {
-            ch_genome_bam_index = BAM_MARKDUPLICATES_PICARD.out.csi
-        }
-        ch_versions = ch_versions.mix(BAM_MARKDUPLICATES_PICARD.out.versions)
+        exit 1, 'Coordinate Picard duplicate marking before multimapper filtering/resolution is disabled. This applies to both --skip_em false and --skip_em true. Keep --skip_markduplicates true; UMI-aware handling remains separate.'
     }
 
     ch_genome_bam
@@ -633,21 +577,107 @@ workflow RNASEQ {
 
 
     //
-    // Resolve STAR multimappers. The main quantitative BAM contains trusted unique
-    // fragments plus all fragments accepted by the resolver's global posterior
-    // expected-FDR rule. A stricter per-fragment high-confidence BAM and an archival
-    // full-ambiguity BAM are realized separately and never substituted silently.
-    if(!params.skip_em) {
-        BAM_FILTER_EM(ch_bam_genome_bai, PREPARE_GENOME.out.chrom_sizes)
-        ch_versions        = ch_versions.mix(BAM_FILTER_EM.out.versions)
-        ch_genome_bam      = BAM_FILTER_EM.out.bam_quantitative
-        ch_mm_highconf_bam = BAM_FILTER_EM.out.bam_highconf
-        ch_mm_full_bam     = BAM_FILTER_EM.out.bam_full
-    }
+    // Realize a quantitative BAM in both modes.
+    //   --skip_em false: trusted unique + Bayesian expected-FDR-resolved multimappers.
+    //   --skip_em true : trusted unique fragments ONLY; all multimappers are excluded
+    //                    from downstream quantitative analysis rather than accepting
+    //                    STAR's arbitrary primary placement.
+    //
+    BAM_FILTER_EM(ch_bam_genome_bai, PREPARE_GENOME.out.chrom_sizes)
+    ch_versions = ch_versions.mix(BAM_FILTER_EM.out.versions)
 
-    // Sort/index the two non-primary BAM tiers separately. Their statistics are
-    // retained for QC, while locus-level downstream counting continues on the
-    // globally expected-FDR-controlled quantitative BAM below.
+    // PATCH 07 mapping acceptance is based on what actually enters the quantitative
+    // BAM.  This is evaluated after the PATCH01 contract and BAM realization so the
+    // definition remains correct in both Bayesian and --skip_em unique-only modes.
+    BAM_FILTER_EM.out.mm_contract_qc
+        .join(BAM_FILTER_EM.out.mm_realization_qc, by: [0])
+        .join(ch_star_multiqc, by: [0])
+        .map { meta, contract_qc, realization_qc, align_log ->
+            [ meta ] + WorkflowRnaseq.getQuantitativeFragmentUsability(
+                params, align_log, contract_qc, realization_qc
+            )
+        }
+        .set { ch_fragment_usability }
+
+    ch_fragment_usability
+        .map { meta, input_fragments, star_unique_pct, star_multi_pct, star_too_many_pct,
+               trusted_unique, eligible_multi, resolved, unresolved, excluded, quantitative_usable,
+               trusted_unique_pct, eligible_multi_pct, resolved_pct, unresolved_pct, excluded_pct,
+               quantitative_usable_pct, mode, pass -> [ meta, pass ] }
+        .set { ch_mapping_pass }
+
+    // Report all samples, including those that subsequently fail the quantitative
+    // usability threshold. Counts are biological fragments; percentages use STAR
+    // input fragments as denominator.
+    ch_fragment_usability
+        .collect()
+        .map { rows ->
+            def tsv = [
+                '# id: mm_fragment_usability',
+                '# section_name: Quantitative fragment usability',
+                '# description: Fragment-level mapping outcome after multimapper handling. Quantitative usable = trusted unique + FDR-resolved multimappers; with --skip_em true it is trusted unique only.',
+                '# plot_type: table',
+                ['Sample','Mode','Input fragments','STAR unique (%)','STAR multiple loci (%)','STAR too many loci (%)','Trusted unique (%)','Eligible multimapper (%)','Resolver retained multimapper (%)','Unresolved multimapper (%)','Excluded mapped (%)','Quantitative usable (%)','Pass'].join('\t')
+            ]
+            rows.each { meta, input_fragments, star_unique_pct, star_multi_pct, star_too_many_pct,
+                        trusted_unique, eligible_multi, resolved, unresolved, excluded, quantitative_usable,
+                        trusted_unique_pct, eligible_multi_pct, resolved_pct, unresolved_pct, excluded_pct,
+                        quantitative_usable_pct, mode, pass ->
+                tsv << [meta.id, mode, input_fragments, star_unique_pct, star_multi_pct, star_too_many_pct,
+                        trusted_unique_pct, eligible_multi_pct, resolved_pct, unresolved_pct, excluded_pct,
+                        quantitative_usable_pct, (pass ? 'PASS' : 'FAIL')].join('\t')
+            }
+            tsv.join('\n') + '\n'
+        }
+        .set { ch_fragment_usability_multiqc }
+
+    ch_fragment_usability
+        .branch { meta, input_fragments, star_unique_pct, star_multi_pct, star_too_many_pct,
+                  trusted_unique, eligible_multi, resolved, unresolved, excluded, quantitative_usable,
+                  trusted_unique_pct, eligible_multi_pct, resolved_pct, unresolved_pct, excluded_pct,
+                  quantitative_usable_pct, mode, pass ->
+            pass: pass
+                pass_mapped_reads[meta.id] = true
+                return "${meta.id}\t${mode}\t${quantitative_usable_pct}\t${params.min_mapped_reads}"
+            fail: !pass
+                pass_mapped_reads[meta.id] = false
+                return "${meta.id}\t${mode}\t${quantitative_usable_pct}\t${params.min_mapped_reads}"
+        }
+        .set { ch_pass_fail_mapped }
+
+    ch_pass_fail_mapped.fail
+        .collect()
+        .map { tsv_data ->
+            def header = ['Sample', 'Mode', 'Quantitative usable fragments (%)', 'Required minimum (%)']
+            WorkflowRnaseq.multiqcTsvFromList(tsv_data, header)
+        }
+        .set { ch_fail_mapping_multiqc }
+
+    // Keep only samples that meet the post-resolution quantitative usability threshold.
+    BAM_FILTER_EM.out.bam_quantitative
+        .join(ch_mapping_pass, by: [0])
+        .filter { meta, bam, pass -> pass }
+        .map { meta, bam, pass -> [ meta, bam ] }
+        .set { ch_genome_bam }
+
+    BAM_FILTER_EM.out.bam_highconf
+        .join(ch_mapping_pass, by: [0])
+        .filter { meta, bam, pass -> pass }
+        .map { meta, bam, pass -> [ meta, bam ] }
+        .set { ch_mm_highconf_bam }
+
+    BAM_FILTER_EM.out.bam_full
+        .join(ch_mapping_pass, by: [0])
+        .filter { meta, bam, pass -> pass }
+        .map { meta, bam, pass -> [ meta, bam ] }
+        .set { ch_mm_full_bam }
+
+    ch_mmresolver_multiqc = params.skip_em ? Channel.empty() : BAM_FILTER_EM.out.mm_multiqc
+    ch_mmdensity_multiqc  = params.skip_em ? Channel.empty() : BAM_FILTER_EM.out.mm_density_multiqc
+
+    // Sort/index the two non-primary BAM tiers only when Bayesian resolution is used.
+    // In skip mode quantitative/high-confidence are both the same trusted-unique set;
+    // duplicating their sort/index work would add cost without additional information.
     if(!params.skip_em) {
         BAM_SORT_STATS_SAMTOOLS_MM_FULL(ch_mm_full_bam, PREPARE_GENOME.out.fasta)
         BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF(ch_mm_highconf_bam, PREPARE_GENOME.out.fasta)
@@ -663,6 +693,14 @@ workflow RNASEQ {
     ch_samtools_flagstat      = BAM_SORT_STATS_SAMTOOLS_BAM.out.flagstat
     ch_samtools_idxstats      = BAM_SORT_STATS_SAMTOOLS_BAM.out.idxstats
     ch_versions       = ch_versions.mix(BAM_SORT_STATS_SAMTOOLS_BAM.out.versions)
+
+    // Preseq now runs on the same quantitative BAM used for downstream counting,
+    // rather than on the pre-resolution STAR BAM containing arbitrary multimappers.
+    if (!params.skip_alignment && !params.skip_qc && !params.skip_preseq) {
+        PRESEQ_LCEXTRAP(ch_genome_bam)
+        ch_preseq_multiqc = PRESEQ_LCEXTRAP.out.lc_extrap
+        ch_versions = ch_versions.mix(PRESEQ_LCEXTRAP.out.versions.first())
+    }
 
     // 
     // Count generating ALL reads, Exonic reads, Intronic reads (+UTRs).
@@ -689,7 +727,6 @@ workflow RNASEQ {
 
     count_rds = INTRON_EXON_COUNT.out.count_rds
     ch_all_rds = count_rds.toList()
-    ch_all_rds.view()
     // Filter the list to only include lists with more than one item
     ch_rds_for_normalization = ch_all_rds.filter { rds_list ->
         rds_list.size() > 1
@@ -726,7 +763,6 @@ workflow RNASEQ {
                     meta1.id == id2 ? [ meta1, bam1, bai1 ,scaling2] : null
             }
             .set { ch_bam_bai_scale }
-        ch_bam_bai_scale.view()
 
         DEEPTOOLS_BIGWIG_NORM(
             ch_bam_bai_scale
@@ -852,12 +888,6 @@ workflow RNASEQ {
     //
     // MODULE: MultiQC
     //
-    ch_hisat2_multiqc = Channel.empty()
-    ch_rsem_multiqc = Channel.empty()
-    ch_salmon_multiqc = Channel.empty()
-    ch_pseudoaligner_clustering_multiqc = Channel.empty()
-    
-    ch_pseudoaligner_pca_multiqc = Channel.empty()
     if (!params.skip_multiqc) {
         workflow_summary    = WorkflowRnaseq.paramsSummaryMultiqc(workflow, summary_params)
         ch_workflow_summary = Channel.value(workflow_summary)
@@ -875,13 +905,14 @@ workflow RNASEQ {
             ch_fail_trimming_multiqc.collectFile(name: 'fail_trimmed_samples_mqc.tsv').ifEmpty([]),
             ch_fail_mapping_multiqc.collectFile(name: 'fail_mapped_samples_mqc.tsv').ifEmpty([]),
             ch_fail_strand_multiqc.collectFile(name: 'fail_strand_check_mqc.tsv').ifEmpty([]),
+            ch_fragment_usability_multiqc.collectFile(name: 'mm_fragment_usability_mqc.tsv').ifEmpty([]),
+            ch_mmresolver_multiqc.collect{it[1]}.ifEmpty([]),
+            ch_mmdensity_multiqc.collect{it[1]}.ifEmpty([]),
             ch_fastqc_raw_multiqc.collect{it[1]}.ifEmpty([]),
             ch_fastqc_trim_multiqc.collect{it[1]}.ifEmpty([]),
             ch_trim_log_multiqc.collect{it[1]}.ifEmpty([]),
             ch_sortmerna_multiqc.collect{it[1]}.ifEmpty([]),
             ch_star_multiqc.collect{it[1]}.ifEmpty([]),
-            ch_hisat2_multiqc.collect{it[1]}.ifEmpty([]),
-            ch_rsem_multiqc.collect{it[1]}.ifEmpty([]),
             ch_salmon_multiqc.collect{it[1]}.ifEmpty([]),
             ch_samtools_stats.collect{it[1]}.ifEmpty([]),
             ch_samtools_flagstat.collect{it[1]}.ifEmpty([]),
@@ -890,8 +921,6 @@ workflow RNASEQ {
             ch_featurecounts_multiqc.collect{it[1]}.ifEmpty([]),
             ch_aligner_pca_multiqc.collect().ifEmpty([]),
             ch_aligner_clustering_multiqc.collect().ifEmpty([]),
-            ch_pseudoaligner_pca_multiqc.collect().ifEmpty([]),
-            ch_pseudoaligner_clustering_multiqc.collect().ifEmpty([]),
             ch_preseq_multiqc.collect{it[1]}.ifEmpty([]),
             ch_qualimap_multiqc.collect{it[1]}.ifEmpty([]),
             ch_dupradar_multiqc.collect{it[1]}.ifEmpty([]),
@@ -916,9 +945,14 @@ workflow RNASEQ {
 
 workflow.onComplete {
     if (params.email || params.email_on_fail) {
-        NfcoreTemplate.email(workflow, params, summary_params, projectDir, log, multiqc_report)
+        NfcoreTemplate.email(
+            workflow, params, summary_params, projectDir, log, multiqc_report,
+            pass_mapped_reads, pass_trimmed_reads, pass_strand_check
+        )
     }
-    NfcoreTemplate.summary(workflow, params, log)
+    NfcoreTemplate.summary(
+        workflow, params, log, pass_mapped_reads, pass_trimmed_reads, pass_strand_check
+    )
 }
 
 

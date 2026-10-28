@@ -1,10 +1,7 @@
-plugins = ['nf-boost@0.7.0']
-
 params {
    input = null
    public_data_ids = null
    genome = null
-   splicesites = null
    gtf_extra_attributes = 'gene_name'
    gtf_group_features = 'gene_id'
    featurecounts_feature_type = 'exon'
@@ -30,11 +27,7 @@ params {
    save_trimmed = false
    skip_trimming = false
    read_length = 50
-   em_iter = 1000
-   em_seed = 1
-   em_locus_merge_distance = 2000
-   em_hotspot_distance = null
-   label_overlap = 0.25
+   mm_resolution_fdr = 0.05
    rmsker = null
    bbsplit_fasta_list = null
    save_bbsplit_reads = false
@@ -43,13 +36,10 @@ params {
    save_non_ribo_reads = false
    ribo_database_manifest = '/hpcnfs/data/GN2/fgualdrini/tools/NEXTFLOW_PIPES/mmrnaseq/assets/rrna-db-defaults.txt'
    aligner = 'star_salmon'
-   pseudo_aligner = null
    seq_center = null
    bam_csi_index = false
    star_ignore_sjdbgtf = false
    salmon_quant_libtype = null
-   hisat2_build_memory = '200.GB'
-   stringtie_ignore_gtf = false
    min_mapped_reads = 5
    star_multimap_max = 500
    star_multimap_score_range = 1
@@ -64,10 +54,10 @@ params {
    skip_markduplicates = true
    skip_alignment = false
    skip_em = false
+   nf_boost_cleanup = false
    skip_quantify_salmon = false
    skip_qc = false
    skip_bigwig = false
-   skip_stringtie = false
    skip_fastqc = false
    skip_preseq = true
    skip_dupradar = false
@@ -86,7 +76,6 @@ params {
    multiqc_logo = null
    max_multiqc_email_size = '25.MB'
    multiqc_methods_description = null
-   nf_boost_cleanup = false
    outdir = null
    publish_dir_mode = 'copy'
    email = null
@@ -531,6 +520,13 @@ params {
    }
 }
 
+plugins = ['nf-boost@0.7.0']
+
+boost {
+   cleanup = false
+   cleanupInterval = '60s'
+}
+
 process {
    cpus = { check_max( 1    * task.attempt, 'cpus'   ) }
    memory = { check_max( 6.GB * task.attempt, 'memory' ) }
@@ -586,7 +582,7 @@ process {
    withName:SRX_DOWNLOAD {
       publishDir = [path:{ "${params.outdir}/pipeline_info" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }]
    }
-   withName:'GUNZIP_.*|MAKE_TRANSCRIPTS_FASTA' {
+   withName:'GUNZIP_.*|GTF_TO_TRANSCRIPT_FASTA' {
       publishDir = [path:{ "${params.outdir}/genome" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
    }
    withName:'UNTAR_.*' {
@@ -594,7 +590,7 @@ process {
          args2 = '--no-same-owner'
       }
    }
-   withName:'UNTAR_.*|STAR_GENOMEGENERATE|STAR_GENOMEGENERATE_IGENOMES|HISAT2_BUILD' {
+   withName:'UNTAR_.*|STAR_GENOMEGENERATE|STAR_GENOMEGENERATE_IGENOMES' {
       publishDir = [path:{ "${params.outdir}/genome/index" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
       cpus = { check_max( 10     * task.attempt, 'cpus'    ) }
       memory = { check_max( 70.GB * task.attempt, 'memory'  ) }
@@ -612,12 +608,6 @@ process {
    withName:SALMON_INDEX {
       ext {
          args = ''
-      }
-      publishDir = [path:{ "${params.outdir}/genome/index" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
-   }
-   withName:RSEM_PREPAREREFERENCE_GENOME {
-      ext {
-         args = '--star'
       }
       publishDir = [path:{ "${params.outdir}/genome/index" }, mode:'copy', saveAs:{ filename -> filename.equals('versions.yml') ? null : filename }, enabled:false]
    }
@@ -696,47 +686,80 @@ process {
       }
       publishDir = [[path:{ "${params.outdir}/${params.aligner}/Final_BAM/mm_contract" }, mode:'copy', pattern:'*.{tsv,tsv.gz}', enabled:false]]
    }
-   withName:'.*:BAM_FILTER_EM:BAM_EM_PREP' {
+   withName:'.*:BAM_FILTER_EM:MM_BAYES_RESOLVER' {
       ext {
-         prefix = { "${meta.id}.prep" }
+         prefix = { "${meta.id}.mm" }
       }
-      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/em_prep" }, mode:'copy', pattern:'*.{bed,tsv}', enabled:false]
+      publishDir = [[path:{ "${params.outdir}/${params.aligner}/Final_BAM/mm_resolver" }, mode:'copy', pattern:'*.{tsv,tsv.gz}', enabled:false]]
    }
-   withName:'.*:BAM_FILTER_EM:BAM_EM' {
+   withName:'.*:BAM_FILTER_EM:MM_BAM_REALIZE' {
       ext {
-         prefix = { "${meta.id}.em" }
+         prefix = { "${meta.id}" }
       }
-      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/em" }, mode:'copy', pattern:'*.{bedpe,txt}', enabled:false]
+      publishDir = [[path:{ "${params.outdir}/${params.aligner}/Final_BAM/mm_realization" }, mode:'copy', pattern:'*.mm.realization_qc.tsv', enabled:false]]
    }
-   withName:'.*:BAM_FILTER_EM:BAM_EM_OUT' {
+   withName:'.*:BAM_FILTER_EM:MM_QC_MERGE' {
       ext {
-         prefix = { "${meta.id}.emout" }
+         prefix = { "${meta.id}" }
       }
-      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/em_out" }, mode:'copy', pattern:'*.{bam}', enabled:false]
-   }
-   withName:'.*:BAM_SORT_STATS_SAMTOOLS_BAM:BAM_STATS_SAMTOOLS:.*' {
-      ext {
-         prefix = { "${meta.id}.em.mark.filt" }
-      }
-      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/samtools_stats" }, mode:'copy', pattern:'*.{stats,flagstat,idxstats}', enabled:true]
+      publishDir = [[path:{ "${params.outdir}/${params.aligner}/Final_BAM/mm_qc" }, mode:'copy', pattern:'*.{tsv}', enabled:true]]
    }
    withName:'.*:BAM_SORT_STATS_SAMTOOLS_BAM:SAMTOOLS_SORT' {
       ext {
-         prefix = { "${meta.id}.em.mark.filt.sorted" }
+         prefix = { "${meta.id}.mm.quantitative.sorted" }
       }
       publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM" }, mode:'copy', pattern:'*.bam']
    }
    withName:'.*:BAM_SORT_STATS_SAMTOOLS_BAM:SAMTOOLS_INDEX' {
       ext {
-         prefix = { "${meta.id}.em.mark.filt" }
+         args = ''
+         prefix = { "${meta.id}.mm.quantitative.sorted" }
       }
       publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM" }, mode:'copy', pattern:'*.{bai,csi}']
    }
-   withName:BEDTOOLS_GENOMECOV {
+   withName:'.*:BAM_SORT_STATS_SAMTOOLS_BAM:BAM_STATS_SAMTOOLS:.*' {
       ext {
-         args = '-split -du'
+         prefix = { "${meta.id}.mm.quantitative.sorted" }
       }
-      publishDir = [path:{ "${params.outdir}/bedtools/${meta.id}" }, enabled:false]
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/samtools_stats" }, mode:'copy', pattern:'*.{stats,flagstat,idxstats}', enabled:true]
+   }
+   withName:'.*:BAM_SORT_STATS_SAMTOOLS_MM_FULL:SAMTOOLS_SORT' {
+      ext {
+         prefix = { "${meta.id}.mm.full.sorted" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/full_ambiguity" }, mode:'copy', pattern:'*.bam']
+   }
+   withName:'.*:BAM_SORT_STATS_SAMTOOLS_MM_FULL:SAMTOOLS_INDEX' {
+      ext {
+         args = ''
+         prefix = { "${meta.id}.mm.full.sorted" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/full_ambiguity" }, mode:'copy', pattern:'*.{bai,csi}']
+   }
+   withName:'.*:BAM_SORT_STATS_SAMTOOLS_MM_FULL:BAM_STATS_SAMTOOLS:.*' {
+      ext {
+         prefix = { "${meta.id}.mm.full.sorted" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/full_ambiguity/stats" }, mode:'copy', pattern:'*.{stats,flagstat,idxstats}']
+   }
+   withName:'.*:BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF:SAMTOOLS_SORT' {
+      ext {
+         prefix = { "${meta.id}.mm.highconf.sorted" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/high_confidence" }, mode:'copy', pattern:'*.bam']
+   }
+   withName:'.*:BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF:SAMTOOLS_INDEX' {
+      ext {
+         args = ''
+         prefix = { "${meta.id}.mm.highconf.sorted" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/high_confidence" }, mode:'copy', pattern:'*.{bai,csi}']
+   }
+   withName:'.*:BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF:BAM_STATS_SAMTOOLS:.*' {
+      ext {
+         prefix = { "${meta.id}.mm.highconf.sorted" }
+      }
+      publishDir = [path:{ "${params.outdir}/${params.aligner}/Final_BAM/high_confidence/stats" }, mode:'copy', pattern:'*.{stats,flagstat,idxstats}']
    }
    withName:'.*:ALIGN_STAR:STAR_ALIGN|.*:ALIGN_STAR:STAR_ALIGN_IGENOMES' {
       ext {
@@ -847,11 +870,6 @@ env {
    PATH = '$PATH:/hpcnfs/software/singularity/3.11.4/bin/:/hpcnfs/software/anaconda/anaconda3/bin/'
 }
 
-boost {
-   cleanup = false
-   cleanupInterval = '60s'
-}
-
 timeline {
    enabled = true
    file = 'timeline.html'
@@ -877,14 +895,14 @@ dag {
 }
 
 manifest {
-   name = 'nf-core/rnaseq'
-   author = 'Harshil Patel, Phil Ewels, Rickard Hammarén'
-   homePage = 'https://github.com/nf-core/rnaseq'
-   description = 'RNA sequencing analysis pipeline for gene/isoform quantification and extensive quality control.'
+   name = 'fgualdr/mmrnaseq'
+   author = 'Francesco Gualdrini and contributors'
+   homePage = 'https://github.com/fgualdr/mmrnaseq'
+   description = 'Repeat-aware RNA-seq analysis with fragment-level multimapper inference, gene quantification, and quality control.'
    mainScript = 'main.nf'
    nextflowVersion = '!>=25.10.4'
-   version = '3.11.1'
-   doi = 'https://doi.org/10.5281/zenodo.1400710'
+   version = '4.0.0'
+   doi = ''
 }
 
 singularity {

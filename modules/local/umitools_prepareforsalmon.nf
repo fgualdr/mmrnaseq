@@ -1,4 +1,4 @@
-process UMITOOLS_PREPAREFORRSEM {
+process UMITOOLS_PREPAREFORSALMON {
     tag "$meta.id"
     label 'process_medium'
 
@@ -22,10 +22,10 @@ process UMITOOLS_PREPAREFORRSEM {
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    prepare-for-rsem.py \\
+    prepare-for-salmon.py \\
         --stdin=$bam \\
         --stdout=${prefix}.bam \\
-        --log=${prefix}.prepare_for_rsem.log \\
+        --log=${prefix}.prepare_for_salmon.log \\
         $args
 
     cat <<-END_VERSIONS > versions.yml

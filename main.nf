@@ -24,7 +24,6 @@ params.gff              = WorkflowMain.getGenomeAttribute(params, 'gff')
 params.gene_bed         = WorkflowMain.getGenomeAttribute(params, 'bed12')
 params.bbsplit_index    = WorkflowMain.getGenomeAttribute(params, 'bbsplit')
 params.star_index       = WorkflowMain.getGenomeAttribute(params, 'star')
-params.rsem_index       = WorkflowMain.getGenomeAttribute(params, 'rsem')
 params.salmon_index     = WorkflowMain.getGenomeAttribute(params, 'salmon')
 
 /*

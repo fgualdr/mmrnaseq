@@ -65,47 +65,12 @@ class WorkflowRnaseq {
                 Nextflow.error("Invalid option: '${params.aligner}'. Valid options for '--aligner': ${valid_params['aligners'].join(', ')}.")
             }
         } else {
-            if (!params.pseudo_aligner) {
-                Nextflow.error("--skip_alignment specified without --pseudo_aligner...please specify e.g. --pseudo_aligner ${valid_params['pseudoaligners'][0]}.")
-            }
-            skipAlignmentWarn(log)
+            Nextflow.error("--skip_alignment is not supported by mmrnaseq because genomic multimapper resolution requires a STAR BAM.")
         }
 
-        if (params.pseudo_aligner) {
-            if (!valid_params['pseudoaligners'].contains(params.pseudo_aligner)) {
-                Nextflow.error("Invalid option: '${params.pseudo_aligner}'. Valid options for '--pseudo_aligner': ${valid_params['pseudoaligners'].join(', ')}.")
-            } else {
-                if (!(params.salmon_index || params.transcript_fasta || (params.fasta && (params.gtf || params.gff)))) {
-                    Nextflow.error("To use `--pseudo_aligner 'salmon'`, you must provide either --salmon_index or --transcript_fasta or both --fasta and --gtf / --gff.")
-                }
-            }
-        }
-
-        // Checks when running --aligner star_rsem
-        if (!params.skip_alignment && params.aligner == 'star_rsem') {
-            if (params.with_umi) {
-                rsemUmiError(log)
-            }
-            if (params.rsem_index && params.star_index) {
-                rsemStarIndexWarn(log)
-            }
-        }
-
-        // Warn if --additional_fasta provided with aligner index
-        if (!params.skip_alignment && params.additional_fasta) {
-            def index = ''
-            if (params.aligner == 'star_salmon' && params.star_index) {
-                index = 'star'
-            }
-            if (params.aligner == 'star_rsem' && params.rsem_index) {
-                index = 'rsem'
-            }
-            if (params.aligner == 'hisat2' && params.hisat2_index) {
-                index = 'hisat2'
-            }
-            if (index) {
-                additionaFastaIndexWarn(index, log)
-            }
+        // Warn if --additional_fasta is combined with a pre-built STAR index.
+        if (!params.skip_alignment && params.additional_fasta && params.star_index) {
+            additionaFastaIndexWarn('star', log)
         }
 
         // Check which RSeQC modules we are running
@@ -195,23 +160,125 @@ class WorkflowRnaseq {
     }
 
     //
-    // Function that parses and returns the alignment rate from the STAR log output
+    // Parse a two-column metric/value TSV emitted by the multimapper stages.
     //
-    public static ArrayList getStarPercentMapped(params, align_log) {
-        def percent_aligned = 0
-        def pattern = /Uniquely mapped reads %\s*\|\s*([\d\.]+)%/
+    public static Map readMetricValueTsv(qc_file) {
+        def metrics = [:]
+        def line_no = 0
+        qc_file.eachLine { line ->
+            line_no += 1
+            if (line_no > 1 && line.trim()) {
+                def fields = line.split('\t', -1)
+                if (fields.size() >= 2) {
+                    metrics[fields[0]] = fields[1]
+                }
+            }
+        }
+        return metrics
+    }
+
+    //
+    // STAR alignment availability. These are aligner-level categories only and are
+    // deliberately kept separate from the final quantitative-usable fraction.
+    // STAR reports paired-end input as read pairs/fragments, matching our fragment
+    // semantics for the downstream multimapper contract.
+    //
+    public static Map getStarAlignmentMetrics(align_log) {
+        def out = [
+            input_fragments: 0L,
+            unique_pct: 0.0,
+            multiple_loci_pct: 0.0,
+            too_many_loci_pct: 0.0
+        ]
         align_log.eachLine { line ->
-            def matcher = line =~ pattern
-            if (matcher) {
-                percent_aligned = matcher[0][1].toFloat()
+            def ni = line =~ /Number of input reads\s*\|\s*([0-9]+)/
+            def up = line =~ /Uniquely mapped reads %\s*\|\s*([\d\.]+)%/
+            def mp = line =~ /% of reads mapped to multiple loci\s*\|\s*([\d\.]+)%/
+            def tp = line =~ /% of reads mapped to too many loci\s*\|\s*([\d\.]+)%/
+            if (ni) out.input_fragments = ni[0][1].toLong()
+            if (up) out.unique_pct = up[0][1].toDouble()
+            if (mp) out.multiple_loci_pct = mp[0][1].toDouble()
+            if (tp) out.too_many_loci_pct = tp[0][1].toDouble()
+        }
+        if (out.input_fragments <= 0) {
+            Nextflow.error("Could not parse 'Number of input reads' from STAR Log.final.out: ${align_log}")
+        }
+        return out
+    }
+
+    //
+    // Quantitative mapping acceptance after multimapper handling.
+    //
+    // --skip_em false: usable = trusted unique + globally FDR-resolved multimappers
+    // --skip_em true : usable = trusted unique only
+    //
+    // The denominator is STAR input fragments, not BAM records. This makes the
+    // threshold compatible with PE fragment semantics and with the actual BAM used
+    // for downstream counting.
+    //
+    public static ArrayList getQuantitativeFragmentUsability(params, align_log, contract_qc, realization_qc) {
+        def star = getStarAlignmentMetrics(align_log)
+        def contract = readMetricValueTsv(contract_qc)
+        def realization = readMetricValueTsv(realization_qc)
+
+        for (key in ['total_fragments','unique_fragments','multimapper_fragments','excluded_fragments']) {
+            if (!contract.containsKey(key)) {
+                Nextflow.error("Missing '${key}' in multimapper contract QC: ${contract_qc}")
+            }
+        }
+        for (key in ['resolved_fdr_fragments','unresolved_fragments']) {
+            if (!realization.containsKey(key)) {
+                Nextflow.error("Missing '${key}' in BAM realization QC: ${realization_qc}")
             }
         }
 
-        def pass = false
-        if (percent_aligned >= params.min_mapped_reads.toFloat()) {
-            pass = true
+        long input_fragments = star.input_fragments as long
+        long contract_total  = contract.total_fragments.toDouble().round() as long
+        long trusted_unique  = contract.unique_fragments.toDouble().round() as long
+        long eligible_multi  = contract.multimapper_fragments.toDouble().round() as long
+        long excluded        = contract.excluded_fragments.toDouble().round() as long
+        long resolved        = realization.resolved_fdr_fragments.toDouble().round() as long
+        long unresolved      = realization.unresolved_fragments.toDouble().round() as long
+
+        if (contract_total > input_fragments) {
+            Nextflow.error("Fragment accounting error for ${contract_qc}: mapped contract fragments (${contract_total}) exceed STAR input fragments (${input_fragments}).")
         }
-        return [ percent_aligned, pass ]
+        if (trusted_unique + eligible_multi + excluded != contract_total) {
+            Nextflow.error("Fragment accounting error for ${contract_qc}: unique + multimapper + excluded != contract total.")
+        }
+        if (resolved + unresolved != eligible_multi) {
+            Nextflow.error("Fragment accounting error for ${realization_qc}: resolved + unresolved != eligible multimappers.")
+        }
+        if (params.skip_em && resolved != 0) {
+            Nextflow.error("--skip_em true must not resolve multimappers, but ${realization_qc} reports ${resolved} resolved fragments.")
+        }
+
+        long quantitative_usable = trusted_unique + resolved
+        def pct = { long n -> input_fragments > 0 ? (100.0d * n / input_fragments) : 0.0d }
+        double quantitative_usable_pct = pct(quantitative_usable)
+        boolean pass = quantitative_usable_pct >= params.min_mapped_reads.toDouble()
+        String mode = params.skip_em ? 'UNIQUE_ONLY' : 'BAYES_FDR'
+
+        return [
+            input_fragments,
+            star.unique_pct,
+            star.multiple_loci_pct,
+            star.too_many_loci_pct,
+            trusted_unique,
+            eligible_multi,
+            resolved,
+            unresolved,
+            excluded,
+            quantitative_usable,
+            pct(trusted_unique),
+            pct(eligible_multi),
+            pct(resolved),
+            pct(unresolved),
+            pct(excluded),
+            quantitative_usable_pct,
+            mode,
+            pass
+        ]
     }
 
     //
@@ -367,33 +434,6 @@ class WorkflowRnaseq {
         log.warn "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n" +
             "  '--skip_alignment' parameter has been provided.\n" +
             "  Skipping alignment, genome-based quantification and all downstream QC processes.\n" +
-            "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-    }
-
-    //
-    // Print a warning if using '--aligner star_rsem' and '--with_umi'
-    //
-    private static void rsemUmiError(log) {
-        def error_string = "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n" +
-            "  When using '--aligner star_rsem', STAR is run by RSEM itself and so it is\n" +
-            "  not possible to remove UMIs before the quantification.\n\n" +
-            "  If you would like to remove UMI barcodes using the '--with_umi' option\n" +
-            "  please use either '--aligner star_salmon' or '--aligner hisat2'.\n" +
-            "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-        Nextflow.error(error_string)
-    }
-
-    //
-    // Print a warning if using '--aligner star_rsem' and providing both '--rsem_index' and '--star_index'
-    //
-    private static void rsemStarIndexWarn(log) {
-        log.warn "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n" +
-            "  When using '--aligner star_rsem', both the STAR and RSEM indices should\n" +
-            "  be present in the path specified by '--rsem_index'.\n\n" +
-            "  This warning has been generated because you have provided both\n" +
-            "  '--rsem_index' and '--star_index'. The pipeline will ignore the latter.\n\n" +
-            "  Please see:\n" +
-            "  https://github.com/nf-core/rnaseq/issues/568\n" +
             "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
     }
 

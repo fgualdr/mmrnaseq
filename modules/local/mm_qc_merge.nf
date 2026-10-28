@@ -16,6 +16,7 @@ process MM_QC_MERGE {
     output:
     tuple val(meta), path('*.mm.qc.tsv'), emit: qc
     tuple val(meta), path('*.mmresolver_mqc.tsv'), emit: multiqc
+    tuple val(meta), path('*.mmdensity_mqc.tsv'), emit: density_multiqc
     path 'versions.yml', emit: versions
 
     script:
