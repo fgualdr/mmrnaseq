@@ -65,7 +65,7 @@ process MM_SKIP_RESOLUTION {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        awk: \$(awk -W version 2>&1 | head -1 | sed 's/"/\\"/g')
+        awk: "\$(awk -W version 2>&1 | head -1 | sed 's/"/\\"/g')"
         mode: "skip_bayesian_resolution_all_multimappers_unresolved"
     END_VERSIONS
     """
