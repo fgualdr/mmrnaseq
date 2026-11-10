@@ -39,6 +39,14 @@ if (params.input) {
     }
 }
 
+// Quantitative counts require a genomic alignment and a matching RepeatMasker file.
+if (params.skip_alignment) {
+    exit 1, '--skip_alignment is not supported: genomic STAR mapping is required for mmRNAseq counting.'
+}
+if (!params.rmsker) {
+    exit 1, '--rmsker is required for the current combined gene and repeat counting process.'
+}
+
 // Check rRNA databases for sortmerna
 if (params.remove_ribo_rna) {
     ch_ribo_db = file(params.ribo_database_manifest, checkIfExists: true)
@@ -109,7 +117,6 @@ ch_biotypes_header_multiqc   = file("$projectDir/assets/multiqc/biotypes_header.
 //
 // MODULE: Loaded from modules/local/
 //
-include { DESEQ2_QC_NORM as DESEQ2_QC_STAR_SALMON } from '../modules/local/deseq2_qc_norm'
 include { DUPRADAR                           } from '../modules/local/dupradar'
 include { MULTIQC                            } from '../modules/local/multiqc'
 include { MULTIQC_CUSTOM_BIOTYPE             } from '../modules/local/multiqc_custom_biotype'
@@ -539,14 +546,6 @@ workflow RNASEQ {
             ch_versions = ch_versions.mix(QUANTIFY_STAR_SALMON.out.versions)
             ch_salmon_multiqc = QUANTIFY_STAR_SALMON.out.results
             // Run DESeq2 QC on Salmon counts
-            // DESEQ2_QC_STAR_SALMON (
-            //     QUANTIFY_STAR_SALMON.out.counts_gene,
-            //     ch_pca_header_multiqc,
-            //     ch_clustering_header_multiqc
-            // )
-            // ch_aligner_pca_multiqc        = DESEQ2_QC_STAR_SALMON.out.pca_multiqc
-            // ch_aligner_clustering_multiqc = DESEQ2_QC_STAR_SALMON.out.dists_multiqc
-            // ch_versions = ch_versions.mix(DESEQ2_QC_STAR_SALMON.out.versions)
         }
     }
 
@@ -735,44 +734,34 @@ workflow RNASEQ {
         rds_list.size() > 1
     }
 
-    if(!params.skip_bigwig && params.normalize) {
-
+    // Normalization must not be disabled when bigWig output is disabled.
+    if (params.normalize) {
         NORMALIZE_COUNTS_INTRON_EXON(
             ch_rds_for_normalization,
             ch_pca_header_multiqc,
             ch_clustering_header_multiqc
         )
-
-
+        ch_versions = ch_versions.mix(NORMALIZE_COUNTS_INTRON_EXON.out.versions.first())
         ch_aligner_pca_multiqc        = NORMALIZE_COUNTS_INTRON_EXON.out.pca_multiqc
         ch_aligner_clustering_multiqc = NORMALIZE_COUNTS_INTRON_EXON.out.dists_multiqc
 
-        NORMALIZE_COUNTS_INTRON_EXON
-            .out
-            .normalization_txt
-            .splitCsv ( header:true, sep:'\t' )
-            .map { row -> 
-                def id = row.Sample_ID
-                def value = row.scaling
-                [ id, value ]
-            }
-            .set { ch_size_factors }
+        if (!params.skip_bigwig) {
+            NORMALIZE_COUNTS_INTRON_EXON.out.normalization_txt
+                .splitCsv(header: true, sep: '\t')
+                .map { row -> [row.Sample_ID, row.scaling] }
+                .set { ch_size_factors }
 
+            ch_bam_genome_bai
+                .combine(ch_size_factors)
+                .map { meta1, bam1, bai1, id2, scaling2 ->
+                    meta1.id == id2 ? [meta1, bam1, bai1, scaling2] : null
+                }
+                .set { ch_bam_bai_scale }
 
-        ch_bam_genome_bai
-            .combine(ch_size_factors)
-            .map { 
-                meta1, bam1, bai1, id2, scaling2 ->
-                    meta1.id == id2 ? [ meta1, bam1, bai1 ,scaling2] : null
-            }
-            .set { ch_bam_bai_scale }
-
-        DEEPTOOLS_BIGWIG_NORM(
-            ch_bam_bai_scale
-        )
-        ch_versions = ch_versions.mix(DEEPTOOLS_BIGWIG_NORM.out.versions.first())
+            DEEPTOOLS_BIGWIG_NORM(ch_bam_bai_scale)
+            ch_versions = ch_versions.mix(DEEPTOOLS_BIGWIG_NORM.out.versions.first())
+        }
     }
-    
 
     //
     // MODULE: Feature biotype QC using featureCounts

@@ -520,7 +520,7 @@
             "properties": {
                 "rseqc_modules": {
                     "type": "string",
-                    "default": "bam_stat,inner_distance,infer_experiment,junction_annotation,junction_saturation,read_distribution,read_duplication",
+                    "default": "infer_experiment,read_distribution",
                     "fa_icon": "fas fa-chart-pie",
                     "description": "Specify the RSeQC modules to run."
                 },
@@ -539,9 +539,9 @@
                 },
                 "skip_quantify_salmon": {
                     "type": "boolean",
-                    "description": "Whether to skip salmon quantification",
+                    "description": "Skip optional alignment-based Salmon transcript quantification (default: true). Salmon may still be used to infer strandedness for auto libraries.",
                     "help_text": "See https://github.com/fgualdr/GeneralNormalizer.",
-                    "default": false
+                    "default": true
                 },
                 "sigma_times": {
                     "type": "number",
@@ -572,12 +572,14 @@
                 "skip_dupradar": {
                     "type": "boolean",
                     "fa_icon": "fas fa-fast-forward",
-                    "description": "Skip dupRadar."
+                    "description": "Skip dupRadar.",
+                    "default": true
                 },
                 "skip_qualimap": {
                     "type": "boolean",
                     "fa_icon": "fas fa-fast-forward",
-                    "description": "Skip Qualimap."
+                    "description": "Skip Qualimap.",
+                    "default": true
                 },
                 "skip_rseqc": {
                     "type": "boolean",
