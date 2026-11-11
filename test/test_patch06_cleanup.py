@@ -92,7 +92,7 @@ for token in [
     assert token in wf, token
 mods = (root / 'conf/modules.config').read_text()
 for token in [
-    '.mm.quantitative.sorted', '.mm.highconf.sorted', '.mm.full.sorted',
+    '.final.sorted', '.mm.highconf.sorted', '.mm.full.sorted',
     'MM_QC_MERGE', 'MM_BAYES_RESOLVER', 'MM_BAM_REALIZE'
 ]:
     assert token in mods, token

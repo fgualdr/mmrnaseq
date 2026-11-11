@@ -54,7 +54,7 @@ def test_bam_io_and_skip_mode_contract():
     assert 'samtools sort' in module
     assert 'MM_SKIP_RESOLUTION' in sub
     assert 'BAM_SORT_STATS_SAMTOOLS_BAM(ch_genome_bam' in wf
-    assert 'params.save_mm_aux_bams' in wf
+    assert 'params.save_align_intermeds' in wf
 
 
 def test_fragment_qc_and_multiqc_order():
@@ -87,5 +87,5 @@ def test_fastq_fragment_and_reference_contract():
 def test_parameters_parse():
     schema = json.loads(source('nextflow_schema.json'))
     c = source('nextflow.config')
-    for p in ('count_utr','count_repeats','save_mm_aux_bams','prepare_transcript_fasta'):
+    for p in ('count_utr','count_repeats','save_align_intermeds','prepare_transcript_fasta'):
         assert p in c and p in json.dumps(schema)

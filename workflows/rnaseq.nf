@@ -685,13 +685,17 @@ workflow RNASEQ {
     ch_mmresolver_multiqc = params.skip_em ? Channel.empty() : BAM_FILTER_EM.out.mm_multiqc
     ch_mmdensity_multiqc  = params.skip_em ? Channel.empty() : BAM_FILTER_EM.out.mm_density_multiqc
 
-    // Sort/index the two non-primary BAM tiers only when Bayesian resolution is used.
+    // Sort/index auxiliary BAM tiers only when explicitly requested.
     // In skip mode quantitative/high-confidence are both the same trusted-unique set;
     // duplicating their sort/index work would add cost without additional information.
-    if(!params.skip_em && params.save_mm_aux_bams) {
+    if (params.save_align_intermeds) {
+        // Full ambiguity is useful even in unique-only mode, when explicitly requested.
         BAM_SORT_STATS_SAMTOOLS_MM_FULL(ch_mm_full_bam, PREPARE_GENOME.out.fasta)
-        BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF(ch_mm_highconf_bam, PREPARE_GENOME.out.fasta)
         ch_versions = ch_versions.mix(BAM_SORT_STATS_SAMTOOLS_MM_FULL.out.versions)
+    }
+    if (!params.skip_em && params.save_align_intermeds) {
+        // In unique-only mode the high-confidence tier would duplicate FINAL_BAM.
+        BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF(ch_mm_highconf_bam, PREPARE_GENOME.out.fasta)
         ch_versions = ch_versions.mix(BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF.out.versions)
     }
 

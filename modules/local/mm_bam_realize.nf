@@ -11,9 +11,9 @@ process MM_BAM_REALIZE {
     tuple val(meta), path(bam), path(resolution), path(excluded) // bam is query-name sorted by MM_CANDIDATE_PREP
 
     output:
-    tuple val(meta), path("*.mm.full.unsorted.bam"),         emit: full_bam
+    tuple val(meta), path("*.mm.full.unsorted.bam"),         optional: true, emit: full_bam
     tuple val(meta), path("*.mm.quantitative.unsorted.bam"), emit: quantitative_bam
-    tuple val(meta), path("*.mm.highconf.unsorted.bam"),     emit: highconf_bam
+    tuple val(meta), path("*.mm.highconf.unsorted.bam"),     optional: true, emit: highconf_bam
     tuple val(meta), path("*.mm.realization_qc.tsv"),         emit: qc
     path 'versions.yml', emit: versions
 
@@ -21,6 +21,14 @@ process MM_BAM_REALIZE {
     def prefix = task.ext.prefix ?: meta.id
     def fdr = (params.mm_resolution_fdr ?: 0.05) as double
     def highconfMin = 1.0d - fdr
+    // Preserve the AWK accounting in every run, but materialize auxiliary BAM tiers
+    // only when requested. /dev/null avoids writing huge diagnostic SAM/BAM files.
+    def fullRequested = params.save_align_intermeds
+    def highconfRequested = params.save_align_intermeds && !params.skip_em
+    def fullSam = fullRequested ? "${prefix}.mm.full.sam" : '/dev/null'
+    def highconfSam = highconfRequested ? "${prefix}.mm.highconf.sam" : '/dev/null'
+    def fullConvert = fullRequested ? "samtools view -bS ${prefix}.mm.full.sam > ${prefix}.mm.full.unsorted.bam" : ''
+    def highconfConvert = highconfRequested ? "samtools view -bS ${prefix}.mm.highconf.sam > ${prefix}.mm.highconf.unsorted.bam" : '' 
     """
     {
         cat $resolution
@@ -29,17 +37,17 @@ process MM_BAM_REALIZE {
 
     samtools view -h $bam | \
         awk \
-            -v full_out=${prefix}.mm.full.sam \
+            -v full_out=${fullSam} \
             -v quantitative_out=${prefix}.mm.quantitative.sam \
-            -v highconf_out=${prefix}.mm.highconf.sam \
+            -v highconf_out=${highconfSam} \
             -v highconf_min=${highconfMin} \
             -v qc_out=${prefix}.mm.realization_qc.tsv \
             -f ${projectDir}/bin/mm_realize_bam.awk \
             ${prefix}.mm.decisions.tsv -
 
-    samtools view -bS ${prefix}.mm.full.sam         > ${prefix}.mm.full.unsorted.bam
     samtools view -bS ${prefix}.mm.quantitative.sam > ${prefix}.mm.quantitative.unsorted.bam
-    samtools view -bS ${prefix}.mm.highconf.sam     > ${prefix}.mm.highconf.unsorted.bam
+    ${fullConvert}
+    ${highconfConvert}
 
     printf '"%s":\n    samtools: "%s"\n    awk: "%s"\n    highconf_min_pmax: "%s"\n' \
         '${task.process}' \

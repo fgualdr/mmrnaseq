@@ -42,7 +42,7 @@ def main() -> None:
     assert ".join(MM_BAYES_RESOLVER.out.density_cv, by: [0])" in subworkflow
     assert "mm_density_cv" in subworkflow
     assert "mm_multiqc" in subworkflow
-    assert "Final_BAM/mm_qc" in config
+    assert "qc/multimapper" in config
 
     with tempfile.TemporaryDirectory() as td:
         d = Path(td)

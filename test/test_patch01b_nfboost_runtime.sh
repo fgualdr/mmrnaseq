@@ -7,8 +7,8 @@ if [[ ! -f "$repo/nextflow.config" ]]; then
     exit 1
 fi
 
-grep -q "id 'nf-boost@0.7.0'" "$repo/nextflow.config" || {
-    echo 'FAIL: nf-boost@0.7.0 is not pinned in top-level nextflow.config' >&2
+grep -q "id 'nf-boost@0.8.0'" "$repo/nextflow.config" || {
+    echo 'FAIL: nf-boost@0.8.0 is not pinned in top-level nextflow.config' >&2
     exit 1
 }
 grep -q 'nf_boost_cleanup[[:space:]]*=[[:space:]]*false' "$repo/nextflow.config" || {
@@ -30,4 +30,4 @@ PY
 
 NXF_SYNTAX_PARSER=v1 nextflow config "$repo" >/dev/null
 
-echo 'PASS nf-boost runtime configuration: 0.7.0 pinned, cleanup=false by default'
+echo 'PASS nf-boost runtime configuration: 0.8.0 pinned, cleanup=false by default'

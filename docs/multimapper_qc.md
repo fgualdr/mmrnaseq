@@ -21,9 +21,9 @@ When Bayesian resolution is enabled, the **Multimapper resolver** table reports 
 
 The BAM tiers have different meanings:
 
-- `*.mm.quantitative.sorted.bam`: trusted unique fragments plus all multimappers accepted by the global posterior expected-FDR procedure. This is the primary downstream quantitative BAM.
-- `high_confidence/*.mm.highconf.sorted.bam`: trusted unique fragments plus the stricter per-fragment high-confidence subset (`pmax >= 1 - mm_resolution_fdr`). This is a robustness/QC product.
-- `full_ambiguity/*.mm.full.sorted.bam`: trusted unique fragments plus unresolved alternatives and excluded archival records. This preserves ambiguity/provenance and is not a direct counting BAM.
+- `FINAL_BAM/*.final.sorted.bam`: trusted unique fragments plus all multimappers accepted by the global posterior expected-FDR procedure. This is the primary downstream quantitative BAM.
+- `intermediate_bam/high_confidence/*.mm.highconf.sorted.bam` (only with `--save_align_intermeds true`): trusted unique fragments plus the stricter per-fragment high-confidence subset (`pmax >= 1 - mm_resolution_fdr`). This is a robustness/QC product.
+- `intermediate_bam/full_ambiguity/*.mm.full.sorted.bam` (only with `--save_align_intermeds true`): trusted unique fragments plus unresolved alternatives and excluded archival records. This preserves ambiguity/provenance and is not a direct counting BAM.
 
 ## Density bandwidth diagnostics
 
@@ -33,4 +33,4 @@ A boundary hit means only that the selected `k` equals the largest value current
 
 ## Preseq and final BAM QC
 
-Preseq and the main samtools QC are run on the **quantitative BAM**, not the pre-resolution STAR BAM, so reported library-complexity and alignment statistics correspond to the data actually used for downstream locus-level analysis.
+When enabled, Preseq and samtools QC operate on the **quantitative BAM**, not the pre-resolution STAR BAM, so reported library-complexity and alignment statistics correspond to the data actually used for downstream locus-level analysis.
