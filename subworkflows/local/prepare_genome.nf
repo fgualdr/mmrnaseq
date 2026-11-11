@@ -44,6 +44,7 @@ workflow PREPARE_GENOME {
     is_aws_igenome       //   boolean: whether the genome files are from AWS iGenomes
     biotype              //    string: if additional fasta file is provided biotype value to use when appending entries to GTF file
     prepare_tool_indices //      list: tools to prepare indices for
+    need_transcript_fasta //     boolean: Salmon quantification, auto-strand or explicit request
 
     main:
 
@@ -111,27 +112,32 @@ workflow PREPARE_GENOME {
         ch_versions = ch_versions.mix(GTF2BED.out.versions)
     }
 
-    //
-    // Uncompress transcript fasta file / create if required
-    //
-    if (transcript_fasta) {
-        if (transcript_fasta.endsWith('.gz')) {
-            ch_transcript_fasta = GUNZIP_TRANSCRIPT_FASTA ( [ [:], transcript_fasta ] ).gunzip.map { it[1] }
-            ch_versions         = ch_versions.mix(GUNZIP_TRANSCRIPT_FASTA.out.versions)
+    // Only materialize the transcript FASTA if a downstream Salmon path needs it.
+    ch_transcript_fasta = Channel.empty()
+    if (need_transcript_fasta) {
+        //
+        // Uncompress transcript fasta file / create if required
+        //
+        if (transcript_fasta) {
+            if (transcript_fasta.endsWith('.gz')) {
+                ch_transcript_fasta = GUNZIP_TRANSCRIPT_FASTA ( [ [:], transcript_fasta ] ).gunzip.map { it[1] }
+                ch_versions         = ch_versions.mix(GUNZIP_TRANSCRIPT_FASTA.out.versions)
+            } else {
+                ch_transcript_fasta = Channel.value(file(transcript_fasta))
+            }
+            if (gencode) { 
+                PREPROCESS_TRANSCRIPTS_FASTA_GENCODE ( ch_transcript_fasta )
+                ch_transcript_fasta = PREPROCESS_TRANSCRIPTS_FASTA_GENCODE.out.fasta
+                ch_versions         = ch_versions.mix(PREPROCESS_TRANSCRIPTS_FASTA_GENCODE.out.versions)
+            }
         } else {
-            ch_transcript_fasta = Channel.value(file(transcript_fasta))
+            ch_filter_gtf = GTF_GENE_FILTER ( ch_fasta, ch_gtf ).gtf
+            GTF_TO_TRANSCRIPT_FASTA ( ch_fasta, ch_filter_gtf )
+            ch_transcript_fasta = GTF_TO_TRANSCRIPT_FASTA.out.fasta
+            ch_versions         = ch_versions.mix(GTF_GENE_FILTER.out.versions)
+            ch_versions         = ch_versions.mix(GTF_TO_TRANSCRIPT_FASTA.out.versions)
         }
-        if (gencode) { 
-            PREPROCESS_TRANSCRIPTS_FASTA_GENCODE ( ch_transcript_fasta )
-            ch_transcript_fasta = PREPROCESS_TRANSCRIPTS_FASTA_GENCODE.out.fasta
-            ch_versions         = ch_versions.mix(PREPROCESS_TRANSCRIPTS_FASTA_GENCODE.out.versions)
-        }
-    } else {
-        ch_filter_gtf = GTF_GENE_FILTER ( ch_fasta, ch_gtf ).gtf
-        GTF_TO_TRANSCRIPT_FASTA ( ch_fasta, ch_filter_gtf )
-        ch_transcript_fasta = GTF_TO_TRANSCRIPT_FASTA.out.fasta
-        ch_versions         = ch_versions.mix(GTF_GENE_FILTER.out.versions)
-        ch_versions         = ch_versions.mix(GTF_TO_TRANSCRIPT_FASTA.out.versions)
+
     }
 
     //

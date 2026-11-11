@@ -56,11 +56,24 @@ workflow ALIGN_STAR {
         ch_versions       = ch_versions.mix(STAR_ALIGN.out.versions.first())
     }
 
-    //
-    // Sort, index BAM file and run samtools stats, flagstat and idxstats
-    //
-    BAM_SORT_STATS_SAMTOOLS ( ch_orig_bam, fasta )
-    ch_versions = ch_versions.mix(BAM_SORT_STATS_SAMTOOLS.out.versions)
+    // Coordinate index is needed before UMI deduplication; for non-UMI
+    // multimapper resolution BAM_FILTER only streams the unsorted STAR BAM.
+    ch_bam_out = ch_orig_bam
+    ch_bai_out = Channel.empty()
+    ch_csi_out = Channel.empty()
+    ch_stats_out = Channel.empty()
+    ch_flagstat_out = Channel.empty()
+    ch_idxstats_out = Channel.empty()
+    if (params.with_umi) {
+        BAM_SORT_STATS_SAMTOOLS(ch_orig_bam, fasta)
+        ch_bam_out = BAM_SORT_STATS_SAMTOOLS.out.bam
+        ch_bai_out = BAM_SORT_STATS_SAMTOOLS.out.bai
+        ch_csi_out = BAM_SORT_STATS_SAMTOOLS.out.csi
+        ch_stats_out = BAM_SORT_STATS_SAMTOOLS.out.stats
+        ch_flagstat_out = BAM_SORT_STATS_SAMTOOLS.out.flagstat
+        ch_idxstats_out = BAM_SORT_STATS_SAMTOOLS.out.idxstats
+        ch_versions = ch_versions.mix(BAM_SORT_STATS_SAMTOOLS.out.versions)
+    }
 
     emit:
     orig_bam       = ch_orig_bam                    // channel: [ val(meta), bam            ]
@@ -72,12 +85,12 @@ workflow ALIGN_STAR {
     fastq          = ch_fastq                       // channel: [ val(meta), fastq          ]
     tab            = ch_tab                         // channel: [ val(meta), tab            ]
 
-    bam            = BAM_SORT_STATS_SAMTOOLS.out.bam      // channel: [ val(meta), [ bam ] ]
-    bai            = BAM_SORT_STATS_SAMTOOLS.out.bai      // channel: [ val(meta), [ bai ] ]
-    csi            = BAM_SORT_STATS_SAMTOOLS.out.csi      // channel: [ val(meta), [ csi ] ]
-    stats          = BAM_SORT_STATS_SAMTOOLS.out.stats    // channel: [ val(meta), [ stats ] ]
-    flagstat       = BAM_SORT_STATS_SAMTOOLS.out.flagstat // channel: [ val(meta), [ flagstat ] ]
-    idxstats       = BAM_SORT_STATS_SAMTOOLS.out.idxstats // channel: [ val(meta), [ idxstats ] ]
+    bam            = ch_bam_out      // channel: [ val(meta), [ bam ] ]
+    bai            = ch_bai_out      // channel: [ val(meta), [ bai ] ]
+    csi            = ch_csi_out      // channel: [ val(meta), [ csi ] ]
+    stats          = ch_stats_out    // channel: [ val(meta), [ stats ] ]
+    flagstat       = ch_flagstat_out // channel: [ val(meta), [ flagstat ] ]
+    idxstats       = ch_idxstats_out // channel: [ val(meta), [ idxstats ] ]
 
     versions       = ch_versions                    // channel: [ versions.yml ]
 }

@@ -18,7 +18,7 @@ process BAM_FILTER {
         'quay.io/biocontainers/mulled-v2-8186960447c5cb2faa697666dc1e6d919ad23f3e:3127fcae6b6bdaf8181e21a26ae61231030a9fcb-0' }"
 
     input:
-    tuple val(meta), path(bam), path(bai)
+    tuple val(meta), path(bam)
 
     output:
     tuple val(meta), path("*.filter2.bam"), emit: bam

@@ -11,6 +11,7 @@ process MM_CANDIDATE_PREP {
     tuple val(meta), path(bam)
 
     output:
+    tuple val(meta), path("*.mm.nsort.bam"), emit: namesorted_bam
     tuple val(meta), path("*.mm.candidates.tsv.gz"), emit: candidates
     tuple val(meta), path("*.mm.unique_fragments.tsv.gz"), emit: unique_fragments
     tuple val(meta), path("*.mm.unique_anchors.tsv.gz"), emit: unique_anchors

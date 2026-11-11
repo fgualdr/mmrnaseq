@@ -188,6 +188,11 @@ workflow RNASEQ {
     // SUBWORKFLOW: Uncompress and prepare reference genome files
     //
     def biotype = params.gencode ? "gene_type" : "gene_biotype"
+    // Skip expensive GTF-to-transcript-FASTA reconstruction when neither
+    // optional Salmon quantification nor automatic strandedness needs it.
+    def sampleSheetForStrand = params.input ?: params.public_data_ids
+    def needsTranscriptFasta = !params.skip_quantify_salmon || params.prepare_transcript_fasta ||
+        WorkflowRnaseq.hasAutoStrandedness(file(sampleSheetForStrand, checkIfExists: true))
     PREPARE_GENOME (
         params.fasta,
         params.gtf,
@@ -202,7 +207,8 @@ workflow RNASEQ {
         params.gencode,
         is_aws_igenome,
         biotype,
-        prepareToolIndices
+        prepareToolIndices,
+        needsTranscriptFasta
     )
     ch_versions = ch_versions.mix(PREPARE_GENOME.out.versions)
 
@@ -568,11 +574,6 @@ workflow RNASEQ {
         exit 1, 'Coordinate Picard duplicate marking before multimapper filtering/resolution is disabled. This applies to both --skip_em false and --skip_em true. Keep --skip_markduplicates true; UMI-aware handling remains separate.'
     }
 
-    ch_genome_bam
-        .join(ch_genome_bam_index, by: [0])
-        .set { ch_bam_genome_bai }
-
-
     //
     // Realize a quantitative BAM in both modes.
     //   --skip_em false: trusted unique + Bayesian expected-FDR-resolved multimappers.
@@ -580,7 +581,7 @@ workflow RNASEQ {
     //                    from downstream quantitative analysis rather than accepting
     //                    STAR's arbitrary primary placement.
     //
-    BAM_FILTER_EM(ch_bam_genome_bai, PREPARE_GENOME.out.chrom_sizes)
+    BAM_FILTER_EM(ch_genome_bam, PREPARE_GENOME.out.chrom_sizes)
     ch_versions = ch_versions.mix(BAM_FILTER_EM.out.versions)
 
     // PATCH 07 mapping acceptance is based on what actually enters the quantitative
@@ -687,7 +688,7 @@ workflow RNASEQ {
     // Sort/index the two non-primary BAM tiers only when Bayesian resolution is used.
     // In skip mode quantitative/high-confidence are both the same trusted-unique set;
     // duplicating their sort/index work would add cost without additional information.
-    if(!params.skip_em) {
+    if(!params.skip_em && params.save_mm_aux_bams) {
         BAM_SORT_STATS_SAMTOOLS_MM_FULL(ch_mm_full_bam, PREPARE_GENOME.out.fasta)
         BAM_SORT_STATS_SAMTOOLS_MM_HIGHCONF(ch_mm_highconf_bam, PREPARE_GENOME.out.fasta)
         ch_versions = ch_versions.mix(BAM_SORT_STATS_SAMTOOLS_MM_FULL.out.versions)

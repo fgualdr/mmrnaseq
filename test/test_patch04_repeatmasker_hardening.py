@@ -38,7 +38,8 @@ def assert_nonoverlap(flank, body):
 
 
 def main():
-    r = (ROOT / "bin/intron_exon_count.r").read_text()
+    r = (ROOT / "bin/prepare_repeat_annotation.r").read_text()
+    per_sample = (ROOT / "bin/intron_exon_count.r").read_text()
     module = (ROOT / "modules/local/intron_exon_count.nf").read_text()
     workflow = (ROOT / "workflows/rnaseq.nf").read_text()
 
@@ -62,7 +63,7 @@ def main():
     assert 'left_end <- start(rmksGR) - 1L' in r
     assert 'right_start <- end(rmksGR) + 1L' in r
     assert 'IRanges::IRanges' in r
-    assert 'function(x) sum(width(x))' in r
+    assert 'function(x) sum(width(x))' in per_sample
     assert '(dat_rmsk$width*0.3*2)' not in r
     assert 'start(rmksGR_upstream) = start(rmksGR_upstream) - w_width' not in r
 
@@ -90,7 +91,8 @@ def main():
 
     # The module now exposes its existing versions.yml for provenance.
     assert "path 'versions.yml', emit: versions" in module
-    assert 'path rmsker' in module
+    assert 'path repeat_annotations' in module
+    assert 'readRDS(opt$repeat_annotations)' in per_sample
     assert 'intron_exon_count.r' in module
 
     # PATCH03 contract must survive the rebase unchanged: quantitative is the
@@ -108,7 +110,7 @@ def main():
     # RepeatMasker counting consumes the main quantitative BAM after sorting and
     # stages the annotation through the reusable path channel.
     assert '.join(ch_genome_bam_index, by: [0])' in workflow
-    assert 'ch_rmsker // RepeatMasker .out/.out.gz staged as a Nextflow path' in workflow
+    assert 'PREP_REPEAT_ANNOTATION(PREP_GTF.out.txdb_sqlite, ch_rmsker)' in workflow
     assert 'ch_versions = ch_versions.mix(INTRON_EXON_COUNT.out.versions.first())' in workflow
 
     print('PASS PATCH04 RepeatMasker hardening rebased on Bayesian BAM tiers')

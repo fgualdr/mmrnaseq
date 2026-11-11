@@ -102,6 +102,22 @@ class WorkflowRnaseq {
         }
     }
 
+    // Inspect a plain CSV samplesheet before building reference files. The
+    // canonical IEO and SRA sheets both contain a `strandedness` column.
+    // These are input metadata, not inferred labels.
+    public static boolean hasAutoStrandedness(samplesheet) {
+        def lines = samplesheet.readLines().findAll { it.trim() && !it.startsWith('#') }
+        if (!lines) Nextflow.error("Empty samplesheet: ${samplesheet}")
+        def header = lines[0].split(',', -1).collect { it.trim().replaceAll(/^"|"$/, '') }
+        int k = header.indexOf('strandedness')
+        if (k < 0) Nextflow.error("No strandedness column in ${samplesheet}")
+        return lines.drop(1).any { line ->
+            def fields = line.split(',', -1)
+            if (fields.size() <= k) Nextflow.error("Invalid strandedness field in ${samplesheet}: ${line}")
+            fields[k].trim().replaceAll(/^"|"$/, '') == 'auto'
+        }
+    }
+
     //
     // Function that parses Salmon quant 'meta_info.json' output file to get inferred strandedness
     //

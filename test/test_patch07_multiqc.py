@@ -54,7 +54,7 @@ def main() -> None:
     assert 'quantitative_usable = trusted_unique + resolved' in helper
     assert "params.skip_em ? 'UNIQUE_ONLY' : 'BAYES_FDR'" in helper
     assert '--skip_em true must not resolve multimappers' in helper
-    assert workflow.index('BAM_FILTER_EM(ch_bam_genome_bai') < workflow.index('getQuantitativeFragmentUsability')
+    assert workflow.index('BAM_FILTER_EM(ch_genome_bam') < workflow.index('getQuantitativeFragmentUsability')
     assert 'Quantitative usable fragments (%)' in workflow
     assert 'BAM_FILTER_EM.out.bam_quantitative' in workflow
     assert '.join(ch_mapping_pass, by: [0])' in workflow
@@ -111,15 +111,15 @@ def main() -> None:
         assert cfg['export_plots_timeout'] == 300
         assert cfg['report_section_order']['fgualdr-mmrnaseq-summary']['order'] > cfg['report_section_order']['star']['order']
         assert cfg['report_section_order']['star']['order'] > cfg['report_section_order']['mm_fragment_usability']['order']
-        assert cfg['report_section_order']['mm_fragment_usability']['order'] > cfg['report_section_order']['samtools']['order']
-        assert cfg['report_section_order']['samtools']['order'] > cfg['report_section_order']['salmon']['order']
+        assert cfg['report_section_order']['mm_fragment_usability']['order'] > cfg['report_section_order']['salmon']['order']
+        assert 'samtools' not in cfg['run_modules']
         assert cfg['report_section_order']['nf-core-mmrnaseq-methods-description']['order'] < 0
         fastqc_runs = [entry['fastqc'] for entry in cfg['module_order'] if isinstance(entry, dict) and 'fastqc' in entry]
         assert len(fastqc_runs) == 2
         assert {x['anchor'] for x in fastqc_runs} == {'fastqc_raw', 'fastqc_trimmed'}
         assert all(x.get('generalstats') is False for x in fastqc_runs)
         module_ids = [entry if isinstance(entry, str) else next(iter(entry)) for entry in cfg['module_order']]
-        for module_id in ['custom_content', 'fastqc', 'fastp', 'star', 'samtools', 'rseqc', 'qualimap', 'preseq', 'picard', 'salmon']:
+        for module_id in ['custom_content', 'fastqc', 'fastp', 'star', 'rseqc', 'qualimap', 'preseq', 'picard', 'salmon']:
             assert module_id in module_ids
 
     # Python 3.14/NFS Kaleido workaround plus fail-loud static export contract.

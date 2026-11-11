@@ -8,7 +8,7 @@ process MM_BAM_REALIZE {
         'quay.io/biocontainers/mulled-v2-9d3a458f6420e5712103ae2af82c94d26d63f059:60b54b43045e8cf39ba307fd683c69d4c57240ce-0' }"
 
     input:
-    tuple val(meta), path(bam), path(resolution), path(excluded)
+    tuple val(meta), path(bam), path(resolution), path(excluded) // bam is query-name sorted by MM_CANDIDATE_PREP
 
     output:
     tuple val(meta), path("*.mm.full.unsorted.bam"),         emit: full_bam
@@ -19,8 +19,6 @@ process MM_BAM_REALIZE {
 
     script:
     def prefix = task.ext.prefix ?: meta.id
-    def avail_mem = task.memory ? task.memory.mega : false
-    def sort_memory = avail_mem ? Math.max(256, ((avail_mem - 1000) / task.cpus).intValue()) : 2000
     def fdr = (params.mm_resolution_fdr ?: 0.05) as double
     def highconfMin = 1.0d - fdr
     """
@@ -29,15 +27,7 @@ process MM_BAM_REALIZE {
         gzip -dc $excluded | awk 'BEGIN{FS=OFS="\\t"} NR>1{print \$1,"EXCLUDED",".",0,0,0,".",0,1,0,0,0,0,0,0,0}'
     } > ${prefix}.mm.decisions.tsv
 
-    samtools sort \
-        -@ ${task.cpus} \
-        -m ${sort_memory}M \
-        -n \
-        -T ${prefix}.realize.nsort \
-        -o ${prefix}.realize.nsort.bam \
-        $bam
-
-    samtools view -h ${prefix}.realize.nsort.bam | \
+    samtools view -h $bam | \
         awk \
             -v full_out=${prefix}.mm.full.sam \
             -v quantitative_out=${prefix}.mm.quantitative.sam \

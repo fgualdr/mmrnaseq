@@ -20,13 +20,13 @@ include { MM_QC_MERGE }         from '../../modules/local/mm_qc_merge'
 
 workflow BAM_FILTER_EM {
     take:
-    ch_bam_bai
+    ch_bam
     ch_chrom_sizes
 
     main:
     ch_versions = Channel.empty()
 
-    BAM_FILTER(ch_bam_bai)
+    BAM_FILTER(ch_bam)
     ch_versions = ch_versions.mix(BAM_FILTER.out.versions.first())
 
     // Always build the PATCH01 fragment contract. It is required both for Bayesian
@@ -54,7 +54,7 @@ workflow BAM_FILTER_EM {
         ch_resolution_for_realization = MM_SKIP_RESOLUTION.out.resolution
     }
 
-    BAM_FILTER.out.bam
+    MM_CANDIDATE_PREP.out.namesorted_bam
         .join(ch_resolution_for_realization, by: [0])
         .join(MM_CANDIDATE_PREP.out.excluded, by: [0])
         .set { ch_realize_inputs }

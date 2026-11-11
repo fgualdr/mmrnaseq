@@ -92,7 +92,7 @@ def main() -> None:
     sub = (ROOT / 'subworkflows/local/bam_filter_em.nf').read_text()
     skipmod = (ROOT / 'modules/local/mm_skip_resolution.nf').read_text()
 
-    assert 'BAM_FILTER_EM(ch_bam_genome_bai, PREPARE_GENOME.out.chrom_sizes)' in wf
+    assert 'BAM_FILTER_EM(ch_genome_bam, PREPARE_GENOME.out.chrom_sizes)' in wf
     assert '--skip_em true : trusted unique fragments ONLY' in wf
     assert 'ch_quantitative_bam = BAM_FILTER.out.bam' not in sub
     assert 'MM_SKIP_RESOLUTION' in sub

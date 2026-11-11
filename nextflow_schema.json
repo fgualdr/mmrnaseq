@@ -333,6 +333,11 @@
                     "type": "boolean",
                     "default": false,
                     "description": "Enable optional 5-prime and 3-prime UTR counting passes."
+                },
+                "prepare_transcript_fasta": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Force transcript FASTA preparation even when Salmon quantification is disabled and no input sample has strandedness=auto."
                 }
             }
         },
@@ -506,6 +511,11 @@
                     "maximum": 0.5,
                     "description": "Posterior expected false-assignment rate for hard multimapper resolution.",
                     "help_text": "Fragments are ranked by posterior error (1-pmax). The largest set whose mean posterior error is no greater than this value is marked RESOLVED. Poor absolute alignments remain unresolved regardless of posterior rank."
+                },
+                "save_mm_aux_bams": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Coordinate-sort/index/statistics on auxiliary full and high-confidence BAMs; quantitative BAM is always sorted and indexed."
                 }
             }
         },
