@@ -17,7 +17,8 @@ module_order:
       path_filters:
         - "./fastqc/raw/*.zip"
   - cutadapt
-  - fastp
+  - fastp:
+      generalstats: false
   - fastqc:
       name: "FastQC (trimmed)"
       anchor: "fastqc_trimmed"
@@ -26,13 +27,27 @@ module_order:
       path_filters:
         - "./fastqc/trim/*.zip"
   - sortmerna
-  - star
-  - samtools
+  - star:
+      generalstats: false
   - rseqc
   - qualimap
   - preseq
   - picard
   - salmon
+
+custom_content:
+  order:
+    - fgualdr-mmrnaseq-summary
+    - fail_trimmed_samples
+    - fail_mapped_samples
+    - strand_qc
+    - mm_fragment_usability
+    - mmresolver
+    - mmdensity
+    - custom_counts_deseq2_pca
+    - custom_counts_deseq2_clustering
+    - nf-core-mmrnaseq-methods-description
+    - multiqc_software_versions
 
 report_section_order:
   # Pipeline context and actual QC warnings first.
@@ -68,8 +83,6 @@ report_section_order:
     order: 1530
 
   # Final quantitative-BAM QC.
-  samtools:
-    order: 1400
   rseqc:
     order: 1390
   qualimap:
@@ -84,8 +97,6 @@ report_section_order:
     order: 1250
   dupradar:
     order: 1200
-  biotype_counts:
-    order: 1190
   custom_counts_deseq2_pca:
     order: 1180
   custom_counts_deseq2_clustering:
@@ -129,7 +140,6 @@ run_modules:
   - sortmerna
   - star
   - salmon
-  - samtools
   - picard
   - preseq
   - rseqc
@@ -162,13 +172,6 @@ sp:
 
   preseq:
     fn: "*.lc_extrap.txt"
-
-  samtools/stats:
-    fn: "*.stats"
-  samtools/flagstat:
-    fn: "*.flagstat"
-  samtools/idxstats:
-    fn: "*.idxstats*"
 
   rseqc/bam_stat:
     fn: "*.bam_stat.txt"
@@ -219,6 +222,30 @@ sp:
     skip: true
 
 custom_data:
+  mm_fragment_generalstats:
+    plot_type: "generalstats"
+    pconfig:
+      - "Input fragments":
+          title: "Input fragments"
+          description: "STAR input templates, not individual mates"
+          format: "{:,.0f}"
+      - "Mapped quantitative fragments":
+          title: "Usable fragments"
+          description: "Trusted unique plus expected-FDR-resolved multimappers"
+          format: "{:,.0f}"
+      - "Mapped quantitative (%)":
+          title: "Usable (%)"
+          suffix: "%"
+          min: 0
+          max: 100
+          format: "{:,.2f}"
+      - "STAR unmapped fragments":
+          title: "STAR unmapped"
+          format: "{:,.0f}"
+      - "Not retained fragments":
+          title: "Not retained"
+          format: "{:,.0f}"
+
   mm_fragment_usability:
     section_name: "Quantitative fragment usability"
     description: >
@@ -234,47 +261,30 @@ custom_data:
     headers:
       "Input fragments":
         format: "{:,.0f}"
-        hidden: true
-      "STAR unique (%)":
-        format: "{:,.2f}"
-        suffix: "%"
-        min: 0
-        max: 100
-      "STAR multiple loci (%)":
-        format: "{:,.2f}"
-        suffix: "%"
-        min: 0
-        max: 100
-      "STAR too many loci (%)":
-        format: "{:,.2f}"
-        suffix: "%"
-        min: 0
-        max: 100
-      "Trusted unique (%)":
-        format: "{:,.2f}"
-        suffix: "%"
-        min: 0
-        max: 100
-      "Eligible multimapper (%)":
-        format: "{:,.2f}"
-        suffix: "%"
-        min: 0
-        max: 100
-      "Resolver retained multimapper (%)":
-        format: "{:,.2f}"
-        suffix: "%"
-        min: 0
-        max: 100
-      "Unresolved multimapper (%)":
-        format: "{:,.2f}"
-        suffix: "%"
-        min: 0
-        max: 100
-      "Excluded mapped (%)":
-        format: "{:,.2f}"
-        suffix: "%"
-        min: 0
-        max: 100
+      "STAR unique fragments":
+        format: "{:,.0f}"
+      "STAR multimapped fragments":
+        format: "{:,.0f}"
+      "STAR too-many-loci fragments":
+        format: "{:,.0f}"
+      "STAR unmapped fragments":
+        format: "{:,.0f}"
+      "Trusted unique fragments":
+        format: "{:,.0f}"
+      "Eligible multimapper fragments":
+        format: "{:,.0f}"
+      "Resolved multimapper fragments":
+        format: "{:,.0f}"
+      "Unresolved multimapper fragments":
+        format: "{:,.0f}"
+      "Excluded mapped fragments":
+        format: "{:,.0f}"
+      "Outside contract fragments":
+        format: "{:,.0f}"
+      "Quantitative usable fragments":
+        format: "{:,.0f}"
+      "Not retained fragments":
+        format: "{:,.0f}"
       "Quantitative usable (%)":
         format: "{:,.2f}"
         suffix: "%"

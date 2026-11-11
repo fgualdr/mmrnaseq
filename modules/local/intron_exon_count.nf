@@ -8,11 +8,11 @@ process INTRON_EXON_COUNT {
     tuple val(meta), path(bam), path(bai)
     path txdb_sqlite
     path metadata
-    path rmsker
+    path repeat_annotations
 
     output:
     path '*.gene.rds', emit: count_rds
-    path '*.rmsk.rds', emit: rmsk_rds
+    path '*.rmsk.rds', optional: true, emit: rmsk_rds
     path 'versions.yml', emit: versions
 
     script:
@@ -30,7 +30,9 @@ process INTRON_EXON_COUNT {
     """
     intron_exon_count.r \\
             -q $txdb_sqlite \\
-            -r $rmsker \\
+            -a $repeat_annotations \\
+            --count_repeats ${params.count_repeats ? 'TRUE' : 'FALSE'} \\
+            --count_utr ${params.count_utr ? 'TRUE' : 'FALSE'} \\
             -o './' \\
             -m $metadata \\
             -b $bam \\

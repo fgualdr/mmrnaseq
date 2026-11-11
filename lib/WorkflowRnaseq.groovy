@@ -81,30 +81,6 @@ class WorkflowRnaseq {
     }
 
     //
-    // Function to check whether biotype field exists in GTF file
-    //
-    public static Boolean biotypeInGtf(gtf_file, biotype, log) {
-        def hits = 0
-        gtf_file.eachLine { line ->
-            def attributes = line.split('\t')[-1].split()
-            if (attributes.contains(biotype)) {
-                hits += 1
-            }
-        }
-        if (hits) {
-            return true
-        } else {
-            log.warn "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n" +
-                "  Biotype attribute '${biotype}' not found in the last column of the GTF file!\n\n" +
-                "  Biotype QC will be skipped to circumvent the issue below:\n" +
-                "  https://github.com/nf-core/rnaseq/issues/460\n\n" +
-                "  Amend '--featurecounts_group_type' to change this behaviour.\n" +
-                "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-            return false
-        }
-    }
-
-    //
     // Function to generate an error if contigs in genome fasta file > 512 Mbp
     //
     public static void checkMaxContigSize(fai_file, log) {
@@ -188,7 +164,13 @@ class WorkflowRnaseq {
             input_fragments: 0L,
             unique_pct: 0.0,
             multiple_loci_pct: 0.0,
-            too_many_loci_pct: 0.0
+            too_many_loci_pct: 0.0,
+            unique_count: null,
+            multiple_loci_count: null,
+            too_many_loci_count: null,
+            unmapped_mismatch_count: null,
+            unmapped_short_count: null,
+            unmapped_other_count: null
         ]
         align_log.eachLine { line ->
             def ni = line =~ /Number of input reads\s*\|\s*([0-9]+)/
@@ -199,9 +181,35 @@ class WorkflowRnaseq {
             if (up) out.unique_pct = up[0][1].toDouble()
             if (mp) out.multiple_loci_pct = mp[0][1].toDouble()
             if (tp) out.too_many_loci_pct = tp[0][1].toDouble()
+            def uc = line =~ /^\s*Uniquely mapped reads number\s*\|\s*(\d+)/
+            def mc = line =~ /^\s*Number of reads mapped to multiple loci\s*\|\s*(\d+)/
+            def tc = line =~ /^\s*Number of reads mapped to too many loci\s*\|\s*(\d+)/
+            def um = line =~ /^\s*Number of reads unmapped: too many mismatches\s*\|\s*(\d+)/
+            def us = line =~ /^\s*Number of reads unmapped: too short\s*\|\s*(\d+)/
+            def uo = line =~ /^\s*Number of reads unmapped: other\s*\|\s*(\d+)/
+            if (uc) out.unique_count = uc[0][1].toLong()
+            if (mc) out.multiple_loci_count = mc[0][1].toLong()
+            if (tc) out.too_many_loci_count = tc[0][1].toLong()
+            if (um) out.unmapped_mismatch_count = um[0][1].toLong()
+            if (us) out.unmapped_short_count = us[0][1].toLong()
+            if (uo) out.unmapped_other_count = uo[0][1].toLong()
         }
         if (out.input_fragments <= 0) {
             Nextflow.error("Could not parse 'Number of input reads' from STAR Log.final.out: ${align_log}")
+        }
+        for (key in ['unique_count','multiple_loci_count','too_many_loci_count']) {
+            if (out[key] == null) Nextflow.error("Missing STAR absolute fragment metric '${key}' in ${align_log}")
+        }
+        long starMapped = out.unique_count + out.multiple_loci_count + out.too_many_loci_count
+        if (starMapped > out.input_fragments) {
+            Nextflow.error("STAR fragment conservation failed in ${align_log}: ${starMapped} mapped categories > ${out.input_fragments} inputs")
+        }
+        out.unmapped_count = out.input_fragments - starMapped
+        if ([out.unmapped_mismatch_count, out.unmapped_short_count, out.unmapped_other_count].every { it != null }) {
+            long detailed = out.unmapped_mismatch_count + out.unmapped_short_count + out.unmapped_other_count
+            if (detailed != out.unmapped_count) {
+                Nextflow.error("STAR unmapped categories (${detailed}) disagree with unmapped remainder (${out.unmapped_count}) in ${align_log}")
+            }
         }
         return out
     }
@@ -216,7 +224,7 @@ class WorkflowRnaseq {
     // threshold compatible with PE fragment semantics and with the actual BAM used
     // for downstream counting.
     //
-    public static ArrayList getQuantitativeFragmentUsability(params, align_log, contract_qc, realization_qc) {
+    public static Map getQuantitativeFragmentUsability(params, align_log, contract_qc, realization_qc) {
         def star = getStarAlignmentMetrics(align_log)
         def contract = readMetricValueTsv(contract_qc)
         def realization = readMetricValueTsv(realization_qc)
@@ -260,24 +268,30 @@ class WorkflowRnaseq {
         String mode = params.skip_em ? 'UNIQUE_ONLY' : 'BAYES_FDR'
 
         return [
-            input_fragments,
-            star.unique_pct,
-            star.multiple_loci_pct,
-            star.too_many_loci_pct,
-            trusted_unique,
-            eligible_multi,
-            resolved,
-            unresolved,
-            excluded,
-            quantitative_usable,
-            pct(trusted_unique),
-            pct(eligible_multi),
-            pct(resolved),
-            pct(unresolved),
-            pct(excluded),
-            quantitative_usable_pct,
-            mode,
-            pass
+            input_fragments: input_fragments,
+            star_unique: star.unique_count,
+            star_multi: star.multiple_loci_count,
+            star_too_many: star.too_many_loci_count,
+            star_unmapped: star.unmapped_count,
+            star_unique_pct: star.unique_pct,
+            star_multi_pct: star.multiple_loci_pct,
+            star_too_many_pct: star.too_many_loci_pct,
+            trusted_unique: trusted_unique,
+            eligible_multi: eligible_multi,
+            resolved: resolved,
+            unresolved: unresolved,
+            excluded: excluded,
+            quantitative_usable: quantitative_usable,
+            excluded_before_contract: input_fragments - contract_total,
+            not_retained: input_fragments - quantitative_usable,
+            trusted_unique_pct: pct(trusted_unique),
+            eligible_multi_pct: pct(eligible_multi),
+            resolved_pct: pct(resolved),
+            unresolved_pct: pct(unresolved),
+            excluded_pct: pct(excluded),
+            quantitative_usable_pct: quantitative_usable_pct,
+            mode: mode,
+            pass: pass
         ]
     }
 

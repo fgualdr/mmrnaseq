@@ -71,6 +71,7 @@ dat_ex  <- lapply(count.table, `[[`, "dat_ex")
 # merge by gene_id (outer join), then set rownames and drop gene_id col
 merge_by_gene <- function(lst){
   out <- Reduce(function(x,y) merge(x,y, by="gene_id", all=TRUE), lst)
+  if (anyDuplicated(out$gene_id)) stop("Duplicate gene IDs in count input")
   rownames(out) <- out$gene_id
   out <- out[, setdiff(colnames(out), "gene_id"), drop=FALSE]
   # replace NA with 0 (DESeq2 cannot take NA)
@@ -211,6 +212,40 @@ if (isTRUE(opt$norm)) {
   sizeFactors(dds) <- sf
 }
 
+# Apply the single set of sample size factors to every gene region.
+# sizeFactors are DESeq2 denominators; the file scaling factors are their inverse.
+sf_used <- 1 / sizeFactors(dds)
+stopifnot(identical(names(sf_used), colnames(raw_counts)),
+          all(is.finite(sf_used)), all(sf_used > 0))
+
+write_region <- function(mat, label) {
+  if (!setequal(colnames(mat), names(sf_used)))
+    stop("Sample mismatch in ", label, " count matrix")
+  if (anyDuplicated(rownames(mat))) stop("Duplicate gene IDs in ", label)
+  mat <- as.matrix(mat[, names(sf_used), drop=FALSE])
+  storage.mode(mat) <- "double"
+  if (anyNA(mat) || any(mat < 0)) stop("Invalid raw counts in ", label)
+  normalized <- sweep(mat, 2L, sf_used, `*`)
+  write.table(data.frame(gene_id=rownames(mat), mat, check.names=FALSE),
+              file=paste0(label,"_READS_raw.txt"), sep="\t", row.names=FALSE, quote=FALSE)
+  write.table(data.frame(gene_id=rownames(normalized), normalized, check.names=FALSE),
+              file=paste0(label,"_READS_norm.txt"), sep="\t", row.names=FALSE, quote=FALSE)
+  invisible(normalized)
+}
+write_region(dat_all, "ALL")
+write_region(dat_int, "INTRON")
+write_region(dat_ex, "EXON")
+
+# Keep backward-compatible downstream filename for the ALL matrix.
+file.copy("ALL_READS_norm.txt", "Final_norm_count_mat.txt", overwrite=TRUE)
+write.table(data.frame(Sample_ID=names(sf_used), scaling=unname(sf_used)),
+            file="scaling_dat.txt", row.names=FALSE, col.names=TRUE, sep="\t", quote=FALSE)
+dir.create("size_factors", showWarnings=FALSE)
+for (sample_id in names(sf_used))
+  write(sf_used[[sample_id]], file=file.path("size_factors",paste0(sample_id,".txt")))
+normFactors <- sizeFactors(dds)
+save(normFactors, file=file.path("size_factors", paste0(opt$outprefix, ".size_factors.RData")))
+
 if (min(dim(raw_counts)) <= 1) {
   save(dds, file=DDSFile); saveRDS(dds, file=sub("\\.dds\\.RData$", ".rds", DDSFile))
   warning("Not enough samples or genes in counts file for PCA.", call.=FALSE)
@@ -331,44 +366,6 @@ if (grDevices::dev.cur() > 1) grDevices::dev.off()
 cn_add = c("sample", colnames(sampleDistMatrix))
 write.table(cbind(sample = rownames(sampleDistMatrix), sampleDistMatrix),file=paste(opt$outprefix, ".sample.dists.txt", sep=""),
             row.names=FALSE, sep="\t", quote=FALSE)
-
-
-################################################
-################################################
-## SAVE SIZE FACTORS                          ##
-################################################
-################################################
-
-SizeFactorsDir <- "size_factors/"
-if (file.exists(SizeFactorsDir) == FALSE) {
-    dir.create(SizeFactorsDir, recursive=TRUE)
-}
-
-NormFactorsFile <- paste(SizeFactorsDir,opt$outprefix, ".size_factors.RData", sep="")
-
-normFactors <- sizeFactors(dds)
-save(normFactors, file=NormFactorsFile)
-
-for (name in names(sizeFactors(dds))) {
-    sizeFactorFile <- paste(SizeFactorsDir,name, ".txt", sep="")
-    write(1/as.numeric(sizeFactors(dds)[name]), file=sizeFactorFile) # this makes scaling factors as in omni norm so multiplying counts by sf
-}
-
-# size factors actually used (DESeq2 default or OmniNorm-based)
-sf_used <- 1/sizeFactors(dds)
-
-# Export DESeq2-normalized counts (raw / sizeFactors)
-de_norm <- sweep(raw_counts[, names(sf_used), drop=FALSE], 2, sf_used, "*")
-write.table(
-  cbind(gene_id = rownames(de_norm), de_norm),
-  file = file.path(opt$outdir, "Final_norm_count_mat.txt"),
-  sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE
-)
-
-# Also keep a tidy table of sample scaling factors
-colData_out <- data.frame(Sample_ID = names(sf_used), scaling = as.numeric(sf_used))
-write.table(colData_out, file = file.path(opt$outdir, "scaling_dat.txt"),
-            row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
 
 
 ################################################

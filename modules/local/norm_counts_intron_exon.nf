@@ -10,9 +10,12 @@ process NORMALIZE_COUNTS_INTRON_EXON {
     output:
     path "normalization", optional: true, emit: normalization
     path "scaling_dat.txt", optional: true, emit: normalization_txt
-    path "ALL_READS_norm.txt", optional: true, emit: final_all_scaled_mat
-    path "INTRON_READS_norm.txt", optional: true, emit: final_intron_scaled_mat
-    path "EXON_READS_norm.txt", optional: true, emit: final_exon_scaled_mat
+    path "ALL_READS_norm.txt", emit: final_all_scaled_mat
+    path "INTRON_READS_norm.txt", emit: final_intron_scaled_mat
+    path "EXON_READS_norm.txt", emit: final_exon_scaled_mat
+    path "ALL_READS_raw.txt", emit: raw_all
+    path "INTRON_READS_raw.txt", emit: raw_intron
+    path "EXON_READS_raw.txt", emit: raw_exon
     path "*.rds", optional: true, emit: rds
     path "*.pdf", optional: true, emit: pdf
     path "*.RData", optional: true, emit: rdata

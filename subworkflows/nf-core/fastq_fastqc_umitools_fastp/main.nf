@@ -12,9 +12,27 @@ include { FASTP                 } from '../../../modules/nf-core/fastp/main'
 //
 import groovy.json.JsonSlurper
 
-def getFastpReadsAfterFiltering(json_file) {
-    def Map json = (Map) new JsonSlurper().parseText(json_file.text).get('summary')
-    return json['after_filtering']['total_reads'].toInteger()
+// fastp summary.after_filtering.total_reads counts mates for PE input.
+// A fragment is one R1/R2 pair; require balanced surviving mates.
+def getFastpFragmentsAfterFiltering(json_file, boolean single_end) {
+    def json = (Map) new JsonSlurper().parseText(json_file.text)
+    def summary = json.summary?.after_filtering
+    if (!summary || summary.total_reads == null) {
+        throw new IllegalArgumentException("Missing fastp summary.after_filtering.total_reads: ${json_file}")
+    }
+    long total = (summary.total_reads as Number).longValue()
+    if (single_end) return total
+    def r1 = json.read1_after_filtering?.total_reads
+    def r2 = json.read2_after_filtering?.total_reads
+    if (r1 == null || r2 == null) {
+        throw new IllegalArgumentException("Missing read1/read2_after_filtering.total_reads in paired-end fastp JSON: ${json_file}")
+    }
+    long n1 = (r1 as Number).longValue()
+    long n2 = (r2 as Number).longValue()
+    if (n1 != n2 || total != n1 + n2) {
+        throw new IllegalArgumentException("Inconsistent paired-end fastp mate counts for ${json_file}: R1=${n1}, R2=${n2}, total=${total}")
+    }
+    return n1
 }
 
 workflow FASTQ_FASTQC_UMITOOLS_FASTP {
@@ -77,7 +95,7 @@ workflow FASTQ_FASTQC_UMITOOLS_FASTP {
     trim_read_count   = Channel.empty()
     if (!skip_trimming) {
         FASTP (
-            reads,
+            umi_reads,
             adapter_fasta,
             save_trimmed_fail,
             save_merged
@@ -96,7 +114,7 @@ workflow FASTQ_FASTQC_UMITOOLS_FASTP {
             .out
             .reads
             .join(trim_json)
-            .map { meta, reads, json -> [ meta, reads, getFastpReadsAfterFiltering(json) ] }
+            .map { meta, reads, json -> [ meta, reads, getFastpFragmentsAfterFiltering(json, meta.single_end as boolean) ] }
             .set { ch_num_trimmed_reads }
 
         ch_num_trimmed_reads

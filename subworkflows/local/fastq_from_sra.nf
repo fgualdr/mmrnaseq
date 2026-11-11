@@ -26,60 +26,48 @@ workflow FASTQ_FROM_SRA {
 }
 
 // Function to get list of [ meta ]
+// One SRX is an experiment; multiple SRRs belonging to that SRX are technical runs.
+// The biological sample and replicate labels are retained, but SRXs are not
+// automatically merged merely because their labels happen to match.
 def create_meta_channel(LinkedHashMap row) {
-    // create meta map
-
-    // filed will match the header of the csv: sample_accession,experiment_accession,run_accession,strandedness,sample,replicate,study_accession
-    // for now it works by SRR
-    def meta = [:]
-    meta.id           = row.sample + "_" + row.replicate + "_" + row.run_accession
-    meta.replicate    = row.replicate
-    meta.strandedness = row.strandedness
-    meta.study_accession        = row.study_accession
-    meta.experiment_accession   = row.experiment_accession
-    meta.run_accession          = row.run_accession
-    meta.sample_accession       = row.sample_accession
+    for (key in ['sample','replicate','run_accession','experiment_accession','strandedness']) {
+        if (!row[key]?.toString()?.trim()) {
+            throw new IllegalArgumentException("Missing ${key} in public-data samplesheet: ${row}")
+        }
+    }
+    def groupId = "${row.sample}_${row.replicate}_${row.experiment_accession}"
+    def meta = [
+        id: "${groupId}_${row.run_accession}",
+        group_id: groupId,
+        replicate: row.replicate,
+        strandedness: row.strandedness,
+        experiment_accession: row.experiment_accession,
+        run_accession: row.run_accession,
+        sample_accession: row.sample_accession,
+        study_accession: row.study_accession
+    ]
     return meta
 }
 
-// Function to check for files ending in '_1.fastq.gz or _2.fastq.gz' and generating: [ meta + [ single_end: true/false], [ reads_1, reads_2 ] ]
-
 def check_fastq_files(meta, fastq) {
-    def meta_new = [:]
-    meta_new.id = meta.id
-    meta_new.strandedness = meta.strandedness
-    
-    def fastq_meta = []
-    println(fastq)
-    fastq_string = fastq.toString()
-    println(fastq_string)
-    // we now check for the fastq files
-    def reads_1 = fastq_string.findAll(/_1.fastq.gz/)
-    def reads_2 = fastq_string.findAll(/_2.fastq.gz/)
-
-    if (reads_1 && reads_2) {
-        if (reads_1.size() == 1 && reads_2.size() == 1) {
-            // Exactly one _1.fastq.gz and one _2.fastq.gz file
-            reads_1 = fastq[0]
-            reads_2 = fastq[1]
-            fastq_meta = [ meta_new + [ single_end: false], [ reads_1, reads_2 ] ]
-            println "DEBUG: ${meta_new.id} reads_1: ${reads_1} reads_2: ${reads_2}"
-        } else {
-            // Handle other cases or print debug information
-            println "DEBUG: Unexpected size for reads_1 or reads_2"
-        }
-    } else if (reads_1) {
-        // Only _1.fastq.gz file
-        reads_1 = fastq
-        fastq_meta = [ meta_new + [ single_end: true], [ reads_1 ] ]
-        println "DEBUG: ${meta_new.id} reads_1: ${reads_1}"
-    } else if (reads_2) {
-        // Exit with ERROR: Only _2.fastq.gz file
-        exit 1, "ERROR: ${meta_new.id} , ${reads_2}, has only _2.fastq.gz files"
+    def paths = fastq instanceof Collection ? fastq.toList() : [fastq]
+    def mate1 = paths.findAll { it.toString().endsWith('_1.fastq.gz') }
+    def mate2 = paths.findAll { it.toString().endsWith('_2.fastq.gz') }
+    def single = paths.findAll { it.toString().endsWith('.fastq.gz') &&
+        !it.toString().endsWith('_1.fastq.gz') && !it.toString().endsWith('_2.fastq.gz') }
+    def reads
+    boolean isSingle
+    if (mate1.size() == 1 && mate2.size() == 1 && paths.size() == 2) {
+        reads = [mate1[0], mate2[0]]
+        isSingle = false
+    } else if (single.size() == 1 && paths.size() == 1) {
+        reads = single
+        isSingle = true
+    } else if (mate1.size() == 1 && paths.size() == 1) {
+        reads = mate1
+        isSingle = true
     } else {
-        // Exit with ERROR: No _1.fastq.gz or _2.fastq.gz files
-        exit 1, "ERROR: ${meta_new.id} , has no _1.fastq.gz or _2.fastq.gz files"
+        throw new IllegalArgumentException("Unexpected SRA FASTQ layout for ${meta.run_accession}: ${paths}")
     }
-    return fastq_meta
+    return [meta + [single_end: isSingle], reads]
 }
-

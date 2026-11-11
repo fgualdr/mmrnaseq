@@ -17,6 +17,7 @@ process MULTIQC {
     path fail_mapping_summary
     path strand_qc
     path fragment_usability_summary
+    path fragment_generalstats_summary
     path mmresolver_qc
     path mmdensity_qc
     path ('fastqc/raw/*')
@@ -25,11 +26,7 @@ process MULTIQC {
     path ('sortmerna/*')
     path ('star/*')
     path ('salmon/*')
-    path ('samtools/stats/*')
-    path ('samtools/flagstat/*')
-    path ('samtools/idxstats/*')
     path ('picard/markduplicates/*')
-    path ('featurecounts/*')
     path ('deseq2/aligner_pca/*')
     path ('deseq2/aligner_clustering/*')
     path ('preseq/*')

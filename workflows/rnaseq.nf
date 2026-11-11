@@ -43,8 +43,8 @@ if (params.input) {
 if (params.skip_alignment) {
     exit 1, '--skip_alignment is not supported: genomic STAR mapping is required for mmRNAseq counting.'
 }
-if (!params.rmsker) {
-    exit 1, '--rmsker is required for the current combined gene and repeat counting process.'
+if (params.count_repeats && !params.rmsker) {
+    exit 1, '--rmsker is required when --count_repeats true.'
 }
 
 // Check rRNA databases for sortmerna
@@ -106,7 +106,6 @@ ch_multiqc_custom_methods_description = params.multiqc_methods_description ? fil
 // Header files for MultiQC
 ch_pca_header_multiqc        = file("$projectDir/assets/multiqc/deseq2_pca_header.txt", checkIfExists: true)
 ch_clustering_header_multiqc = file("$projectDir/assets/multiqc/deseq2_clustering_header.txt", checkIfExists: true)
-ch_biotypes_header_multiqc   = file("$projectDir/assets/multiqc/biotypes_header.txt", checkIfExists: true)
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -119,7 +118,6 @@ ch_biotypes_header_multiqc   = file("$projectDir/assets/multiqc/biotypes_header.
 //
 include { DUPRADAR                           } from '../modules/local/dupradar'
 include { MULTIQC                            } from '../modules/local/multiqc'
-include { MULTIQC_CUSTOM_BIOTYPE             } from '../modules/local/multiqc_custom_biotype'
 
 //
 // SUBWORKFLOW: Consisting of a mix of local and nf-core/modules
@@ -134,6 +132,7 @@ include { QUANTIFY_SALMON as QUANTIFY_STAR_SALMON } from '../subworkflows/local/
 
 
 include { PREP_GTF      } from '../modules/local/prep_gtf'
+include { PREP_REPEAT_ANNOTATION } from '../modules/local/prep_repeat_annotation'
 include { INTRON_EXON_COUNT } from '../modules/local/intron_exon_count'
 include { NORMALIZE_COUNTS_INTRON_EXON } from '../modules/local/norm_counts_intron_exon'
 include { DEEPTOOLS_BIGWIG_NORM } from '../modules/local/deeptools_bw_norm'
@@ -153,7 +152,6 @@ include { SAMTOOLS_SORT               } from '../modules/nf-core/samtools/sort/m
 include { PRESEQ_LCEXTRAP             } from '../modules/nf-core/preseq/lcextrap/main'
 include { QUALIMAP_RNASEQ             } from '../modules/nf-core/qualimap/rnaseq/main'
 include { SORTMERNA                   } from '../modules/nf-core/sortmerna/main'
-include { SUBREAD_FEATURECOUNTS       } from '../modules/nf-core/subread/featurecounts/main'
 include { CUSTOM_DUMPSOFTWAREVERSIONS } from '../modules/nf-core/custom/dumpsoftwareversions/main'
 
 //
@@ -189,7 +187,7 @@ workflow RNASEQ {
     //
     // SUBWORKFLOW: Uncompress and prepare reference genome files
     //
-    def biotype = params.gencode ? "gene_type" : params.featurecounts_group_type
+    def biotype = params.gencode ? "gene_type" : "gene_biotype"
     PREPARE_GENOME (
         params.fasta,
         params.gtf,
@@ -230,8 +228,8 @@ workflow RNASEQ {
         .reads
         .map {
             meta, fastq ->
-                new_id = meta.id.replaceAll(/_[^_]+$/, "")
-                [ meta + [id: new_id], fastq ]
+                [ [id: meta.group_id, single_end: meta.single_end,
+                   strandedness: meta.strandedness, experiment_accession: meta.experiment_accession], fastq ]
         }
         .groupTuple()
         .branch {
@@ -260,7 +258,7 @@ workflow RNASEQ {
         .reads
         .map {
             meta, fastq ->
-                new_id = meta.id.replaceAll(/_[^_]+$/, "")
+                new_id = meta.id.replaceFirst(/_T[0-9]+$/, "")
                 [ meta + [id: new_id], fastq ]
         }
         .groupTuple()
@@ -384,7 +382,7 @@ workflow RNASEQ {
         .map {
             meta, num_reads ->
                 pass_trimmed_reads[meta.id] = true
-                if (num_reads <= params.min_trimmed_reads.toFloat()) {
+                if (num_reads < params.min_trimmed_reads.toFloat()) {
                     pass_trimmed_reads[meta.id] = false
                     return [ "$meta.id\t$num_reads" ]
                 }
@@ -392,7 +390,7 @@ workflow RNASEQ {
         .collect()
         .map { 
             tsv_data ->
-                def header = ["Sample", "Reads after trimming"]
+                def header = ["Sample", "Fragments after trimming"]
                 WorkflowRnaseq.multiqcTsvFromList(tsv_data, header)
         }
         .set { ch_fail_trimming_multiqc }
@@ -592,65 +590,74 @@ workflow RNASEQ {
         .join(BAM_FILTER_EM.out.mm_realization_qc, by: [0])
         .join(ch_star_multiqc, by: [0])
         .map { meta, contract_qc, realization_qc, align_log ->
-            [ meta ] + WorkflowRnaseq.getQuantitativeFragmentUsability(
+            [ meta, WorkflowRnaseq.getQuantitativeFragmentUsability(
                 params, align_log, contract_qc, realization_qc
-            )
+            ) ]
         }
         .set { ch_fragment_usability }
 
     ch_fragment_usability
-        .map { meta, input_fragments, star_unique_pct, star_multi_pct, star_too_many_pct,
-               trusted_unique, eligible_multi, resolved, unresolved, excluded, quantitative_usable,
-               trusted_unique_pct, eligible_multi_pct, resolved_pct, unresolved_pct, excluded_pct,
-               quantitative_usable_pct, mode, pass -> [ meta, pass ] }
+        .map { meta, stats -> [meta, stats.pass] }
         .set { ch_mapping_pass }
 
-    // Report all samples, including those that subsequently fail the quantitative
-    // usability threshold. Counts are biological fragments; percentages use STAR
-    // input fragments as denominator.
-    // IMPORTANT: Nextflow collect() flattens tuple emissions by default.
-    // Preserve one complete per-sample tuple per list element; otherwise the first
-    // element presented to rows.each below is the metadata map itself.
+    // All reported count columns are *fragments*, not alignment records.
     ch_fragment_usability
         .collect(flat: false)
         .map { rows ->
             def tsv = [
                 '# id: mm_fragment_usability',
                 '# section_name: Quantitative fragment usability',
-                '# description: Fragment-level mapping outcome after multimapper handling. Quantitative usable = trusted unique + FDR-resolved multimappers; with --skip_em true it is trusted unique only.',
+                '# description: Absolute fragment fate after STAR and multimapper resolution. STAR unmapped differs from total not retained.',
                 '# plot_type: table',
-                ['Sample','Mode','Input fragments','STAR unique (%)','STAR multiple loci (%)','STAR too many loci (%)','Trusted unique (%)','Eligible multimapper (%)','Resolver retained multimapper (%)','Unresolved multimapper (%)','Excluded mapped (%)','Quantitative usable (%)','Pass'].join('\t')
+                ['Sample','Mode','Input fragments','STAR unique fragments','STAR multimapped fragments',
+                 'STAR too-many-loci fragments','STAR unmapped fragments','Trusted unique fragments',
+                 'Eligible multimapper fragments','Resolved multimapper fragments','Unresolved multimapper fragments',
+                 'Excluded mapped fragments','Outside contract fragments','Quantitative usable fragments',
+                 'Not retained fragments','Quantitative usable (%)','Pass'].join('\t')
             ]
-            rows.each { meta, input_fragments, star_unique_pct, star_multi_pct, star_too_many_pct,
-                        trusted_unique, eligible_multi, resolved, unresolved, excluded, quantitative_usable,
-                        trusted_unique_pct, eligible_multi_pct, resolved_pct, unresolved_pct, excluded_pct,
-                        quantitative_usable_pct, mode, pass ->
-                tsv << [meta.id, mode, input_fragments, star_unique_pct, star_multi_pct, star_too_many_pct,
-                        trusted_unique_pct, eligible_multi_pct, resolved_pct, unresolved_pct, excluded_pct,
-                        quantitative_usable_pct, (pass ? 'PASS' : 'FAIL')].join('\t')
+            rows.each { meta, stats ->
+                tsv << [meta.id,stats.mode,stats.input_fragments,stats.star_unique,stats.star_multi,
+                        stats.star_too_many,stats.star_unmapped,stats.trusted_unique,stats.eligible_multi,
+                        stats.resolved,stats.unresolved,stats.excluded,stats.excluded_before_contract,
+                        stats.quantitative_usable,stats.not_retained,
+                        stats.quantitative_usable_pct,(stats.pass ? 'PASS':'FAIL')].join('\t')
             }
             tsv.join('\n') + '\n'
         }
         .set { ch_fragment_usability_multiqc }
 
     ch_fragment_usability
-        .branch { meta, input_fragments, star_unique_pct, star_multi_pct, star_too_many_pct,
-                  trusted_unique, eligible_multi, resolved, unresolved, excluded, quantitative_usable,
-                  trusted_unique_pct, eligible_multi_pct, resolved_pct, unresolved_pct, excluded_pct,
-                  quantitative_usable_pct, mode, pass ->
-            pass: pass
+        .collect(flat: false)
+        .map { rows ->
+            def tsv = [
+                '# id: mm_fragment_generalstats',
+                '# plot_type: generalstats',
+                ['Sample','Input fragments','Mapped quantitative fragments','Mapped quantitative (%)',
+                 'STAR unmapped fragments','Not retained fragments'].join('\t')
+            ]
+            rows.each { meta, stats ->
+                tsv << [meta.id,stats.input_fragments,stats.quantitative_usable,
+                        stats.quantitative_usable_pct,stats.star_unmapped,stats.not_retained].join('\t')
+            }
+            tsv.join('\n') + '\n'
+        }
+        .set { ch_fragment_generalstats_multiqc }
+
+    ch_fragment_usability
+        .branch { meta, stats ->
+            pass: stats.pass
                 pass_mapped_reads[meta.id] = true
-                return "${meta.id}\t${mode}\t${quantitative_usable_pct}\t${params.min_mapped_reads}"
-            fail: !pass
+                return "${meta.id}\t${stats.mode}\t${stats.quantitative_usable_pct}\t${params.min_mapped_reads}"
+            fail: !stats.pass
                 pass_mapped_reads[meta.id] = false
-                return "${meta.id}\t${mode}\t${quantitative_usable_pct}\t${params.min_mapped_reads}"
+                return "${meta.id}\t${stats.mode}\t${stats.quantitative_usable_pct}\t${params.min_mapped_reads}"
         }
         .set { ch_pass_fail_mapped }
 
     ch_pass_fail_mapped.fail
         .collect()
         .map { tsv_data ->
-            def header = ['Sample', 'Mode', 'Quantitative usable fragments (%)', 'Required minimum (%)']
+            def header = ['Sample','Mode','Quantitative usable fragments (%)','Required minimum (%)']
             WorkflowRnaseq.multiqcTsvFromList(tsv_data, header)
         }
         .set { ch_fail_mapping_multiqc }
@@ -713,6 +720,15 @@ workflow RNASEQ {
         PREPARE_GENOME.out.chrom_sizes
     )
 
+    // Prepare RepeatMasker intervals/flanks only once per reference, not per sample.
+    if (params.count_repeats) {
+        PREP_REPEAT_ANNOTATION(PREP_GTF.out.txdb_sqlite, ch_rmsker)
+        ch_repeat_annotations = PREP_REPEAT_ANNOTATION.out.annotation
+        ch_versions = ch_versions.mix(PREP_REPEAT_ANNOTATION.out.versions.first())
+    } else {
+        ch_repeat_annotations = Channel.value(ch_dummy_file)
+    }
+
     // combine BAM and index
     ch_genome_bam
         .join(ch_genome_bam_index, by: [0])
@@ -722,7 +738,7 @@ workflow RNASEQ {
         ch_bam_genome_bai,
         PREP_GTF.out.txdb_sqlite,
         PREP_GTF.out.metadata,
-        ch_rmsker // RepeatMasker .out/.out.gz staged as a Nextflow path
+        ch_repeat_annotations // Precomputed intervals; dummy when repeat counting disabled
     )
 
     ch_versions = ch_versions.mix(INTRON_EXON_COUNT.out.versions.first())
@@ -761,37 +777,6 @@ workflow RNASEQ {
             DEEPTOOLS_BIGWIG_NORM(ch_bam_bai_scale)
             ch_versions = ch_versions.mix(DEEPTOOLS_BIGWIG_NORM.out.versions.first())
         }
-    }
-
-    //
-    // MODULE: Feature biotype QC using featureCounts
-    // Need to remove this..
-    ch_featurecounts_multiqc = Channel.empty()
-
-    if (!params.skip_alignment && !params.skip_qc && !params.skip_biotype_qc && biotype) {
-        
-        PREPARE_GENOME
-            .out
-            .gtf
-            .map { WorkflowRnaseq.biotypeInGtf(it, biotype, log) }
-            .set { biotype_in_gtf }
-        // Prevent any samples from running if GTF file doesn't have a valid biotype
-        ch_genome_bam
-            .combine(PREPARE_GENOME.out.gtf)
-            .combine(biotype_in_gtf)
-            .filter { it[-1] }
-            .map { it[0..<it.size()-1] }
-            .set { ch_featurecounts }
-        SUBREAD_FEATURECOUNTS (
-            ch_featurecounts
-        )
-        ch_versions = ch_versions.mix(SUBREAD_FEATURECOUNTS.out.versions.first())
-        MULTIQC_CUSTOM_BIOTYPE (
-            SUBREAD_FEATURECOUNTS.out.counts,
-            ch_biotypes_header_multiqc
-        )
-        ch_featurecounts_multiqc = MULTIQC_CUSTOM_BIOTYPE.out.tsv
-        ch_versions = ch_versions.mix(MULTIQC_CUSTOM_BIOTYPE.out.versions.first())
     }
 
     //
@@ -920,6 +905,7 @@ workflow RNASEQ {
             ch_fail_mapping_multiqc.collectFile(name: 'fail_mapped_samples_mqc.tsv').ifEmpty([]),
             ch_strand_qc_multiqc.collectFile(name: 'strand_qc_mqc.tsv').ifEmpty([]),
             ch_fragment_usability_multiqc.collectFile(name: 'mm_fragment_usability_mqc.tsv').ifEmpty([]),
+            ch_fragment_generalstats_multiqc.collectFile(name: 'mm_fragment_generalstats_mqc.tsv').ifEmpty([]),
             ch_mmresolver_multiqc.collect{it[1]}.ifEmpty([]),
             ch_mmdensity_multiqc.collect{it[1]}.ifEmpty([]),
             ch_fastqc_raw_multiqc.collect{it[1]}.ifEmpty([]),
@@ -928,11 +914,7 @@ workflow RNASEQ {
             ch_sortmerna_multiqc.collect{it[1]}.ifEmpty([]),
             ch_star_multiqc.collect{it[1]}.ifEmpty([]),
             ch_salmon_multiqc.collect{it[1]}.ifEmpty([]),
-            ch_samtools_stats.collect{it[1]}.ifEmpty([]),
-            ch_samtools_flagstat.collect{it[1]}.ifEmpty([]),
-            ch_samtools_idxstats.collect{it[1]}.ifEmpty([]),
             ch_markduplicates_multiqc.collect{it[1]}.ifEmpty([]),
-            ch_featurecounts_multiqc.collect{it[1]}.ifEmpty([]),
             ch_aligner_pca_multiqc.collect().ifEmpty([]),
             ch_aligner_clustering_multiqc.collect().ifEmpty([]),
             ch_preseq_multiqc.collect{it[1]}.ifEmpty([]),
