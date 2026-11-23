@@ -100,7 +100,7 @@ for token in [
 # Do not let coordinate duplicate marking act on arbitrary STAR primary placements.
 assert 'Coordinate Picard duplicate marking before multimapper filtering/resolution is disabled' in wf
 assert 'This applies to both --skip_em false and --skip_em true' in wf
-assert 'BAM_FILTER_EM(ch_genome_bam, PREPARE_GENOME.out.chrom_sizes)' in wf
+assert 'BAM_FILTER_EM(ch_genome_bam, PREPARE_GENOME.out.chrom_sizes, PREPARE_GENOME.out.fasta)' in wf
 assert (root / 'modules/local/mm_skip_resolution.nf').exists()
 assert 'ch_quantitative_bam = BAM_FILTER.out.bam' not in sub
 

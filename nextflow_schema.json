@@ -511,6 +511,30 @@
                     "maximum": 0.5,
                     "description": "Posterior expected false-assignment rate for hard multimapper resolution.",
                     "help_text": "Fragments are ranked by posterior error (1-pmax). The largest set whose mean posterior error is no greater than this value is marked RESOLVED. Poor absolute alignments remain unresolved regardless of posterior rank."
+                },
+                "mm_experimental_em": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Run experimental conditional locus EM as an independent sidecar; FINAL_BAM remains unchanged."
+                },
+                "mm_em_loci": {
+                    "type": "string",
+                    "description": "Nonoverlapping BED4 genomic sources for experimental EM."
+                },
+                "mm_em_max_edges": {
+                    "type": "integer",
+                    "default": 2000000,
+                    "minimum": 1,
+                    "description": "Safety limit for in-memory experimental EM candidate edges."
+                },
+                "mm_experimental_container": {
+                    "type": "string",
+                    "description": "Path or URI of validated container providing Python 3.11, NumPy, samtools for experimental EM."
+                },
+                "mm_experimental_conda": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Explicitly enable experimental EM without a supplied container when running -profile conda/mamba."
                 }
             }
         },

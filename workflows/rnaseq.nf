@@ -581,7 +581,7 @@ workflow RNASEQ {
     //                    from downstream quantitative analysis rather than accepting
     //                    STAR's arbitrary primary placement.
     //
-    BAM_FILTER_EM(ch_genome_bam, PREPARE_GENOME.out.chrom_sizes)
+    BAM_FILTER_EM(ch_genome_bam, PREPARE_GENOME.out.chrom_sizes, PREPARE_GENOME.out.fasta)
     ch_versions = ch_versions.mix(BAM_FILTER_EM.out.versions)
 
     // PATCH 07 mapping acceptance is based on what actually enters the quantitative

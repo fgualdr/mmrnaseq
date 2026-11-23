@@ -17,11 +17,14 @@ include { MM_BAYES_RESOLVER }   from '../../modules/local/mm_bayes_resolver'
 include { MM_SKIP_RESOLUTION }  from '../../modules/local/mm_skip_resolution'
 include { MM_BAM_REALIZE }      from '../../modules/local/mm_bam_realize'
 include { MM_QC_MERGE }         from '../../modules/local/mm_qc_merge'
+include { MM_QUALITY_SCORE }    from '../../modules/local/mm_quality_score'
+include { MM_LOCUS_EM }         from '../../modules/local/mm_locus_em'
 
 workflow BAM_FILTER_EM {
     take:
     ch_bam
     ch_chrom_sizes
+    ch_fasta
 
     main:
     ch_versions = Channel.empty()
@@ -33,6 +36,35 @@ workflow BAM_FILTER_EM {
     // inference and for the unique-only fallback when inference is skipped.
     MM_CANDIDATE_PREP(BAM_FILTER.out.bam)
     ch_versions = ch_versions.mix(MM_CANDIDATE_PREP.out.versions.first())
+
+    // Experimental sidecar only. No change to the validated Bayesian resolver,
+    // final BAM, or published gene/repeat count matrices.
+    ch_em_abundance = Channel.empty()
+    ch_em_posterior = Channel.empty()
+    ch_em_qc = Channel.empty()
+    if (params.mm_experimental_em) {
+        if (!params.mm_experimental_container && !params.mm_experimental_conda) {
+            error 'Experimental EM needs --mm_experimental_container (Singularity/Apptainer) or --mm_experimental_conda true with -profile conda/mamba'
+        }
+        if (!params.mm_em_loci) {
+            error '--mm_experimental_em requires --mm_em_loci BED4 (nonoverlapping)'
+        }
+        MM_CANDIDATE_PREP.out.candidates
+            .join(MM_CANDIDATE_PREP.out.namesorted_bam, by: [0])
+            .set { ch_quality_inputs }
+        MM_QUALITY_SCORE(ch_quality_inputs, ch_fasta)
+        ch_versions = ch_versions.mix(MM_QUALITY_SCORE.out.versions.first())
+
+        MM_CANDIDATE_PREP.out.candidates
+            .join(MM_QUALITY_SCORE.out.scores, by: [0])
+            .join(MM_CANDIDATE_PREP.out.unique_anchors, by: [0])
+            .set { ch_em_inputs }
+        MM_LOCUS_EM(ch_em_inputs, file(params.mm_em_loci, checkIfExists: true))
+        ch_versions = ch_versions.mix(MM_LOCUS_EM.out.versions.first())
+        ch_em_abundance = MM_LOCUS_EM.out.abundance
+        ch_em_posterior = MM_LOCUS_EM.out.posterior
+        ch_em_qc = MM_LOCUS_EM.out.qc
+    }
 
     if (!params.skip_em) {
         MM_CANDIDATE_PREP.out.candidates
@@ -90,6 +122,9 @@ workflow BAM_FILTER_EM {
     bam_confident = ch_highconf_bam
     bam_full = ch_full_bam
 
+    mm_experimental_em_abundance = ch_em_abundance
+    mm_experimental_em_posterior = ch_em_posterior
+    mm_experimental_em_qc = ch_em_qc
     mm_candidates = MM_CANDIDATE_PREP.out.candidates
     mm_unique_fragments = MM_CANDIDATE_PREP.out.unique_fragments
     mm_unique_anchors = MM_CANDIDATE_PREP.out.unique_anchors

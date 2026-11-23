@@ -1,0 +1,8 @@
+name: mm_graph_em
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - numpy=1.26
+  - samtools=1.20

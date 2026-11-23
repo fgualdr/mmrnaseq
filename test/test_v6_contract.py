@@ -48,7 +48,7 @@ def test_bam_io_and_skip_mode_contract():
     sub = source('subworkflows/local/bam_filter_em.nf')
     module = source('modules/local/mm_candidate_prep.nf')
     bamreal = source('modules/local/mm_bam_realize.nf')
-    assert 'BAM_FILTER_EM(ch_genome_bam, PREPARE_GENOME.out.chrom_sizes)' in wf
+    assert 'BAM_FILTER_EM(ch_genome_bam, PREPARE_GENOME.out.chrom_sizes, PREPARE_GENOME.out.fasta)' in wf
     assert 'MM_CANDIDATE_PREP.out.namesorted_bam' in sub
     assert 'samtools sort' not in bamreal
     assert 'samtools sort' in module

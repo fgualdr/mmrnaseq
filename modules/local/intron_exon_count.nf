@@ -1,6 +1,6 @@
 process INTRON_EXON_COUNT {
     tag "$meta.id"
-    label 'process_medium'
+    label 'process_high_memory'
 
     container 'docker://fgualdr/envr_norm_gr'
 
